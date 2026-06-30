@@ -6,7 +6,7 @@ export type StickyNoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | 
 export type StickyNoteFont = "sans" | "serif" | "mono" | "cursive";
 
 // ---------- Request-Inputs node ----------
-export type RequestFieldType = "text_field" | "image_field";
+export type RequestFieldType = "text_field" | "image_field" | "number_field";
 
 export interface StickyNoteData {
   text: string;
@@ -20,7 +20,7 @@ export interface RequestField {
   id: string;
   name: string;
   type: RequestFieldType;
-  value: string; // text content OR uploaded image URL
+  value: string; // text content OR uploaded image URL OR stringified number
 }
 
 export interface RequestInputsData {

@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   X,
   Coins,
+  Plus,
 } from "lucide-react";
 import { TypedHandle } from "./typed-handle";
 import { ParamSlider } from "./param-slider";
@@ -22,6 +23,7 @@ import type { CropImageData } from "@/types/workflow";
 
 export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const addFieldToRequest = useCanvasStore((s) => s.addFieldToRequest);
   const isLocked = useCanvasStore(
     (s) => s.nodes.find((n) => n.id === id)?.draggable === false
   );
@@ -155,8 +157,13 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
                 <Upload className="h-3.5 w-3.5" />
                 <span>{data.inputImageUrl ? "Change Image" : "Upload Image"}</span>
               </button>
-              <button className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">
-                +
+              <button
+                onClick={() => addFieldToRequest(id, "input_image", "image", "image_field")}
+                disabled={isInputImageConnected}
+                title={isInputImageConnected ? "Already connected to Request-Inputs" : "Add to Request"}
+                className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Plus className="h-4 w-4" />
               </button>
 
               {flyoutOpen && (
@@ -204,6 +211,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={0}
             disabled={isXConnected}
             onChange={(v) => set("x", v)}
+            onAddToRequest={() => addFieldToRequest(id, "x", "number", "x_position", String(data.x))}
           />
           <SliderHandle nodeId={id} id="y" />
           <ParamSlider
@@ -213,6 +221,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={0}
             disabled={isYConnected}
             onChange={(v) => set("y", v)}
+            onAddToRequest={() => addFieldToRequest(id, "y", "number", "y_position", String(data.y))}
           />
           <SliderHandle nodeId={id} id="width" />
           <ParamSlider
@@ -223,6 +232,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={100}
             disabled={isWidthConnected}
             onChange={(v) => set("width", v)}
+            onAddToRequest={() => addFieldToRequest(id, "width", "number", "width", String(data.width))}
           />
           <SliderHandle nodeId={id} id="height" />
           <ParamSlider
@@ -233,6 +243,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={100}
             disabled={isHeightConnected}
             onChange={(v) => set("height", v)}
+            onAddToRequest={() => addFieldToRequest(id, "height", "number", "height", String(data.height))}
           />
         </div>
 

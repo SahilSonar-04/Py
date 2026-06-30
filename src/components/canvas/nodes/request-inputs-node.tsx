@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Position, type NodeProps } from "reactflow";
-import { Plus, GripVertical, Trash2, Pencil, Info, Upload } from "lucide-react";
+import { Plus, GripVertical, Trash2, Pencil, Info, Upload, Copy, Type, Image as ImageIcon, Hash } from "lucide-react";
 import { nanoid } from "nanoid";
 import { TypedHandle } from "./typed-handle";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -10,25 +10,30 @@ import type { RequestInputsData, RequestFieldType } from "@/types/workflow";
 
 export function RequestInputsNode({ id, data, selected }: NodeProps<RequestInputsData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const removeRequestField = useCanvasStore((s) => s.removeRequestField);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   function addField(type: RequestFieldType) {
     const count = data.fields.filter((f) => f.type === type).length;
-    const baseName = type === "text_field" ? "text_field" : "image_field";
+    const baseName =
+      type === "text_field" ? "text_field" : type === "image_field" ? "image_field" : "number_field";
     const name = count === 0 ? baseName : `${baseName}_${count + 1}`;
-    const newField = { id: `field_${nanoid(8)}`, name, type, value: "" };
+    const newField = { id: `field_${nanoid(8)}`, name, type, value: type === "number_field" ? "0" : "" };
     updateNodeData(id, { fields: [...data.fields, newField] });
     setPickerOpen(false);
+  }
+
+  function duplicateField(fieldId: string) {
+    const field = data.fields.find((f) => f.id === fieldId);
+    if (!field) return;
+    const newField = { ...field, id: `field_${nanoid(8)}`, name: `${field.name}_copy` };
+    updateNodeData(id, { fields: [...data.fields, newField] });
   }
 
   function renameField(fieldId: string, name: string) {
     updateNodeData(id, {
       fields: data.fields.map((f) => (f.id === fieldId ? { ...f, name } : f)),
     });
-  }
-
-  function removeField(fieldId: string) {
-    updateNodeData(id, { fields: data.fields.filter((f) => f.id !== fieldId) });
   }
 
   function setFieldValue(fieldId: string, value: string) {
@@ -64,15 +69,21 @@ export function RequestInputsNode({ id, data, selected }: NodeProps<RequestInput
             <div className="nodrag absolute right-0 top-9 z-50 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
               <button
                 onClick={() => addField("text_field")}
-                className="block w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
               >
-                + Text field
+                <Type className="h-3.5 w-3.5 text-gray-400" /> Text field
+              </button>
+              <button
+                onClick={() => addField("number_field")}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+              >
+                <Hash className="h-3.5 w-3.5 text-gray-400" /> Number field
               </button>
               <button
                 onClick={() => addField("image_field")}
-                className="block w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
               >
-                + Image field
+                <ImageIcon className="h-3.5 w-3.5 text-gray-400" /> Image field
               </button>
             </div>
           )}
@@ -82,20 +93,28 @@ export function RequestInputsNode({ id, data, selected }: NodeProps<RequestInput
       <div className="space-y-4 px-4 py-4" style={{ overflow: "visible" }}>
         {data.fields.length === 0 && (
           <p className="text-xs text-gray-400">
-            No fields yet. Click + to add a text or image field.
+            No fields yet. Click + to add a field, or use &ldquo;Add to
+            Request&rdquo; on any node input.
           </p>
         )}
         {data.fields.map((field) => (
           <div key={field.id} className="relative" style={{ overflow: "visible" }}>
             <div className="mb-2 flex w-full min-w-0 items-center gap-2">
-              <GripVertical className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-gray-400" />
               <FieldLabel
                 value={field.name}
                 onChange={(v) => renameField(field.id, v)}
               />
               <div className="ml-auto flex items-center gap-1">
                 <button
-                  onClick={() => removeField(field.id)}
+                  onClick={() => duplicateField(field.id)}
+                  className="nodrag rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  title="Duplicate"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => removeRequestField(field.id)}
                   className="nodrag rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500"
                   title="Delete"
                 >
@@ -112,19 +131,35 @@ export function RequestInputsNode({ id, data, selected }: NodeProps<RequestInput
                 rows={3}
                 className="nodrag nowheel w-full resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] px-3 py-2 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
               />
+            ) : field.type === "number_field" ? (
+              <input
+                type="number"
+                value={field.value}
+                onChange={(e) => setFieldValue(field.id, e.target.value)}
+                className="nodrag w-full rounded-lg border border-gray-200 bg-[#F5F5F5] px-3 py-2 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+              />
             ) : (
               <ImageFieldUpload value={field.value} onChange={(v) => setFieldValue(field.id, v)} />
             )}
 
+            {/* Anchored to 50% of THIS field's own height, so it stays
+                correctly centered no matter how tall the content below
+                (e.g. an image preview) makes the row. */}
             <div
               className="pointer-events-none absolute flex items-center"
-              style={{ right: -21, top: 24 }}
+              style={{ right: -21, top: "50%", transform: "translateY(-50%)" }}
             >
               <TypedHandle
                 type="source"
                 position={Position.Right}
                 id={field.id}
-                dataType={field.type === "image_field" ? "image" : "text"}
+                dataType={
+                  field.type === "image_field"
+                    ? "image"
+                    : field.type === "number_field"
+                    ? "number"
+                    : "text"
+                }
                 style={{ pointerEvents: "auto" }}
               />
             </div>
