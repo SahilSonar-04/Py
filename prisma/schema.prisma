@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum RunScope {
+  FULL
+  PARTIAL
+  SINGLE
+}
+
+enum NodeExecStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  userId      String // Clerk user id, scopes ownership
+  name        String   @default("Untitled Workflow")
+  // Full React Flow graph (nodes + edges) stored as JSON for simplicity/speed
+  graph       Json
+  status      String   @default("idle") // idle | running (quick badge for dashboard)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  runs WorkflowRun[]
+
+  @@index([userId])
+}
+
+model WorkflowRun {
+  id         String    @id @default(cuid())
+  workflowId String
+  workflow   Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId     String
+  status     RunStatus @default(PENDING)
+  scope      RunScope  @default(FULL)
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+  // node ids that were targeted for single/partial runs
+  targetNodeIds Json?
+
+  nodeExecutions NodeExecution[]
+
+  @@index([workflowId])
+  @@index([userId])
+}
+
+model NodeExecution {
+  id          String          @id @default(cuid())
+  runId       String
+  run         WorkflowRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  nodeId      String // React Flow node id
+  nodeType    String // request | crop_image | gemini | response
+  nodeLabel   String?
+  status      NodeExecStatus  @default(PENDING)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  durationMs  Int?
+  inputs      Json?
+  output      Json?
+  error       String?
+
+  @@index([runId])
+}

@@ -1,0 +1,252 @@
+"use client";
+
+import { useState } from "react";
+import { Position, type NodeProps } from "reactflow";
+import { Play, Loader2, ChevronDown, Sparkles, Upload, X } from "lucide-react";
+import { TypedHandle } from "./typed-handle";
+import { useCanvasStore } from "@/store/canvas-store";
+import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
+
+export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
+  const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const [uploading, setUploading] = useState(false);
+
+  function set<K extends keyof GeminiData>(key: K, value: GeminiData[K]) {
+    updateNodeData(id, { [key]: value });
+  }
+
+  async function handleImageUpload(file: File) {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const json = await res.json();
+      if (json.url) set("imageUrls", [...data.imageUrls, json.url]);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function runSingleNode() {
+    set("status", "running");
+    try {
+      const res = await fetch("/api/nodes/gemini/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: data.model,
+          prompt: data.prompt,
+          systemPrompt: data.systemPrompt,
+          imageUrls: data.imageUrls,
+        }),
+      });
+      const json = await res.json();
+      if (json.response !== undefined) {
+        set("response", json.response);
+        set("status", "success");
+      } else {
+        set("status", "failed");
+        set("error", json.error ?? "Unknown error");
+      }
+    } catch (err) {
+      set("status", "failed");
+      set("error", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const isRunning = data.status === "running";
+
+  return (
+    <div
+      className={`node-card max-w-[380px] ${isRunning ? "node-running" : ""} ${
+        selected ? "node-locked-ring" : ""
+      }`}
+      style={{ overflow: "visible" }}
+    >
+      <div className="flex items-start justify-between border-b border-gray-100 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
+              <Sparkles className="h-3.5 w-3.5" />
+            </div>
+            <select
+              value={data.model}
+              onChange={(e) => set("model", e.target.value as GeminiData["model"])}
+              className="nodrag truncate bg-transparent text-sm font-medium text-gray-900 outline-none"
+            >
+              {GEMINI_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <button
+          onClick={runSingleNode}
+          disabled={isRunning || !data.prompt}
+          className="nodrag flex items-center gap-1.5 rounded-md border border-green-500/30 bg-green-500/20 px-3 py-1.5 text-xs font-medium text-green-600 transition-all hover:bg-green-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
+          <span>Run</span>
+        </button>
+      </div>
+
+      <div className="space-y-4 px-4 py-4" style={{ overflow: "visible" }}>
+        {/* Prompt */}
+        <div className="relative" style={{ overflow: "visible" }}>
+          <div className="absolute flex items-center" style={{ left: -22, top: 8 }}>
+            <TypedHandle type="target" position={Position.Left} id="prompt" dataType="text" />
+          </div>
+          <div className="mb-1.5 pl-3 text-xs text-gray-500">
+            Prompt<span className="text-red-400">*</span>
+          </div>
+          <textarea
+            value={data.prompt}
+            onChange={(e) => set("prompt", e.target.value)}
+            placeholder="Enter your prompt..."
+            rows={3}
+            className="nodrag nowheel ml-3 w-[calc(100%-0.75rem)] resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] p-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+          />
+        </div>
+
+        {/* System Prompt */}
+        <div className="relative" style={{ overflow: "visible" }}>
+          <div className="absolute flex items-center" style={{ left: -22, top: 14 }}>
+            <TypedHandle type="target" position={Position.Left} id="system_prompt" dataType="text" />
+          </div>
+          <div className="mb-1.5 pl-3 text-xs text-gray-500">System Prompt</div>
+          <textarea
+            value={data.systemPrompt}
+            onChange={(e) => set("systemPrompt", e.target.value)}
+            placeholder="You are a helpful assistant..."
+            rows={3}
+            className="nodrag nowheel ml-3 w-[calc(100%-0.75rem)] resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] p-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+          />
+        </div>
+
+        {/* Image (Vision) - accepts multiple connections */}
+        <div className="relative" style={{ overflow: "visible" }}>
+          <div className="absolute flex items-center" style={{ left: -22, top: 12 }}>
+            <TypedHandle type="target" position={Position.Left} id="image" dataType="image" />
+          </div>
+          <div className="flex items-start gap-3 pl-3">
+            <span className="shrink-0 pt-2 text-xs text-gray-500">Image (Vision)</span>
+            <div className="flex-1">
+              {data.imageUrls.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {data.imageUrls.map((url, idx) => (
+                    <div key={url} className="group relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-12 w-12 rounded border border-gray-200 object-cover" />
+                      <button
+                        onClick={() =>
+                          set(
+                            "imageUrls",
+                            data.imageUrls.filter((_, i) => i !== idx)
+                          )
+                        }
+                        className="nodrag absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="nodrag flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{uploading ? "Uploading..." : "Upload image"}</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file);
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Video / Audio / File - placeholders, manual URL entry */}
+        <SimpleUrlField id="video" label="Video" dataType="video" value={data.videoUrl} onChange={(v) => set("videoUrl", v)} />
+        <SimpleUrlField id="audio" label="Audio" dataType="audio" value={data.audioUrl} onChange={(v) => set("audioUrl", v)} />
+        <SimpleUrlField id="file" label="File" dataType="file" value={data.fileUrl} onChange={(v) => set("fileUrl", v)} />
+
+        {/* Settings (collapsed) */}
+        <div>
+          <button
+            onClick={() => set("settingsOpen", !data.settingsOpen)}
+            className="nodrag flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600"
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${data.settingsOpen ? "" : "-rotate-90"}`}
+            />
+            <span>Settings</span>
+          </button>
+          {data.settingsOpen && (
+            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
+              Temperature, max tokens, and top-p controls go here.
+            </div>
+          )}
+        </div>
+
+        {/* Output */}
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <div className="relative" style={{ overflow: "visible" }}>
+            <div className="absolute flex items-center" style={{ right: -22, top: 8 }}>
+              <TypedHandle type="source" position={Position.Right} id="response" dataType="text" />
+            </div>
+            <div className="mb-1.5 text-xs text-gray-500">Response</div>
+            <div className="min-h-[84px] rounded-lg border border-gray-200 bg-gray-50 p-3">
+              {data.response ? (
+                <p className="whitespace-pre-wrap text-xs text-gray-800">{data.response}</p>
+              ) : (
+                <div className="py-6 text-center text-xs text-gray-400">
+                  {isRunning ? "Generating..." : "No output yet"}
+                </div>
+              )}
+            </div>
+            {data.error && <p className="mt-1 text-[10px] text-red-500">{data.error}</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SimpleUrlField({
+  id,
+  label,
+  dataType,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  dataType: "video" | "audio" | "file";
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative" style={{ overflow: "visible" }}>
+      <div className="absolute flex items-center" style={{ left: -22, top: 20 }}>
+        <TypedHandle type="target" position={Position.Left} id={id} dataType={dataType} />
+      </div>
+      <div className="flex items-center gap-3 pl-3">
+        <span className="w-14 shrink-0 text-xs text-gray-500">{label}</span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={`${label} URL (optional)`}
+          className="nodrag h-9 w-full rounded-lg border border-gray-200 bg-[#F5F5F5] px-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+        />
+      </div>
+    </div>
+  );
+}
