@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { readdir } from "fs/promises";
 import { writeFile } from "fs/promises";
 import path from "path";
 import { nanoid } from "nanoid";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -50,4 +52,22 @@ export async function POST(req: NextRequest) {
 
   const url = `/uploads/${filename}`;
   return NextResponse.json({ url });
+}
+
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  try {
+    const files = await readdir(uploadDir);
+    const urls = files
+      .filter((f) => IMAGE_EXT.has(path.extname(f).toLowerCase()))
+      .sort()
+      .reverse()
+      .map((f) => `/uploads/${f}`);
+    return NextResponse.json({ urls });
+  } catch {
+    return NextResponse.json({ urls: [] });
+  }
 }

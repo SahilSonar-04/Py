@@ -2,22 +2,41 @@
 
 import { useState } from "react";
 import { Position, type NodeProps } from "reactflow";
-import { Play, Loader2, Upload, Crop } from "lucide-react";
+import {
+  Play,
+  Loader2,
+  Upload,
+  Crop,
+  Info,
+  RotateCcw,
+  MoreHorizontal,
+  X,
+  Coins,
+} from "lucide-react";
 import { TypedHandle } from "./typed-handle";
+import { ParamSlider } from "./param-slider";
+import { ImageUploadFlyout } from "./image-upload-flyout";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { CropImageData } from "@/types/workflow";
 
 export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const removeNode = useCanvasStore((s) => s.removeNode);
   const [uploading, setUploading] = useState(false);
-  const isInputImageConnected = useCanvasStore((s) =>
-    s.isHandleConnected(id, "input_image")
-  );
+  const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const isInputImageConnected = useCanvasStore((s) => s.isHandleConnected(id, "input_image"));
+  const isXConnected = useCanvasStore((s) => s.isHandleConnected(id, "x"));
+  const isYConnected = useCanvasStore((s) => s.isHandleConnected(id, "y"));
+  const isWidthConnected = useCanvasStore((s) => s.isHandleConnected(id, "width"));
+  const isHeightConnected = useCanvasStore((s) => s.isHandleConnected(id, "height"));
+
   function set<K extends keyof CropImageData>(key: K, value: CropImageData[K]) {
     updateNodeData(id, { [key]: value });
   }
 
-  async function handleFile(file: File) {
+  async function uploadFile(file: File) {
     setUploading(true);
     try {
       const formData = new FormData();
@@ -27,6 +46,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
       if (json.url) set("inputImageUrl", json.url);
     } finally {
       setUploading(false);
+      setFlyoutOpen(false);
     }
   }
 
@@ -62,26 +82,63 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
 
   return (
     <div
-      className={`node-card max-w-[380px] ${isRunning ? "node-running" : ""} ${
+      className={`node-card max-w-[420px] ${isRunning ? "node-running" : ""} ${
         selected ? "node-locked-ring" : ""
       }`}
       style={{ overflow: "visible" }}
     >
-      <div className="flex items-start justify-between border-b border-gray-100 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
-            <Crop className="h-3.5 w-3.5" />
-          </div>
-          <span className="truncate text-sm font-medium text-gray-900">{data.label || "Crop Image"}</span>
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Crop className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <span className="truncate text-sm font-semibold text-gray-900">
+            {data.label || "Crop Image"}
+          </span>
         </div>
-        <button
-          onClick={runSingleNode}
-          disabled={isRunning || !data.inputImageUrl}
-          className="nodrag flex items-center gap-1.5 rounded-md border border-green-500/30 bg-green-500/20 px-3 py-1.5 text-xs font-medium text-green-600 transition-all hover:bg-green-500/30 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
-          <span>Run</span>
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="group/tip relative">
+            <Info className="h-3.5 w-3.5 cursor-default text-gray-400" />
+            <span className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden w-max max-w-[220px] rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] text-gray-700 shadow-lg group-hover/tip:block">
+              Crops an image to a percentage-based bounding box.
+            </span>
+          </span>
+          <button
+            title="Reset all parameters"
+            onClick={() => updateNodeData(id, { x: 0, y: 0, width: 100, height: 100 })}
+            className="nodrag rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={runSingleNode}
+            disabled={isRunning || !data.inputImageUrl}
+            className="nodrag flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-100 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
+            Run
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="nodrag flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            {menuOpen && (
+              <div className="nodrag absolute right-0 top-9 z-50 w-32 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    removeNode(id);
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-4 px-4 py-4" style={{ overflow: "visible" }}>
@@ -90,60 +147,104 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
           <div className="absolute flex items-center" style={{ left: -22, top: 12 }}>
             <TypedHandle type="target" position={Position.Left} id="input_image" dataType="image" />
           </div>
-          <div className="flex items-start gap-3 pl-3">
-            <span className="shrink-0 pt-2 text-xs text-gray-500">
+          <div className="pl-3">
+            <div className="mb-1.5 text-xs text-gray-500">
               Input Image<span className="text-red-400">*</span>
-            </span>
-            <div className="flex-1">
-              {data.inputImageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={data.inputImageUrl}
-                  alt="input"
-                  className="mb-2 h-20 w-full rounded-lg border border-gray-200 object-cover"
-                />
-              )}
-              <label
-                className={`nodrag flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs ${
+            </div>
+            <div className="relative flex items-center gap-2" style={{ overflow: "visible" }}>
+              <button
+                onClick={() => !isInputImageConnected && setFlyoutOpen((v) => !v)}
+                disabled={isInputImageConnected}
+                className={`nodrag flex flex-1 items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs ${
                   isInputImageConnected
                     ? "cursor-not-allowed opacity-50"
                     : "cursor-pointer hover:border-gray-400 hover:text-gray-700"
                 }`}
               >
                 <Upload className="h-3.5 w-3.5" />
-                <span>{uploading ? "Uploading..." : "Upload image"}</span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-                  hidden
-                  disabled={isInputImageConnected}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFile(file);
+                <span>{data.inputImageUrl ? "Change Image" : "Upload Image"}</span>
+              </button>
+              <button className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">
+                +
+              </button>
+
+              {flyoutOpen && (
+                <ImageUploadFlyout
+                  uploading={uploading}
+                  onUploadFile={uploadFile}
+                  onSelectAsset={(url) => set("inputImageUrl", url)}
+                  onClose={() => setFlyoutOpen(false)}
+                />
+              )}
+            </div>
+
+            {data.inputImageUrl && (
+              <div className="relative mt-2 overflow-hidden rounded-lg border border-indigo-300">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={data.inputImageUrl} alt="input" className="block w-full" />
+                {/* Live crop-box overlay, driven by the sliders below */}
+                <div
+                  className="pointer-events-none absolute border-2 border-indigo-500 bg-indigo-500/10"
+                  style={{
+                    left: `${data.x}%`,
+                    top: `${data.y}%`,
+                    width: `${data.width}%`,
+                    height: `${data.height}%`,
                   }}
                 />
-              </label>
-            </div>
+                <button
+                  onClick={() => set("inputImageUrl", "")}
+                  className="nodrag absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                  title="Remove image"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* x/y/width/height params */}
-        <CropParamField nodeId ={id} id="x" label="X Position (%)" value={data.x} onChange={(v) => set("x", v)} />
-        <CropParamField nodeId={id} id="y" label="Y Position (%)" value={data.y} onChange={(v) => set("y", v)} />
-        <CropParamField
-          nodeId={id}
-          id="width"
-          label="Width (%)"
-          value={data.width}
-          onChange={(v) => set("width", v)}
-        />
-        <CropParamField
-          nodeId={id}
-          id="height"
-          label="Height (%)"
-          value={data.height}
-          onChange={(v) => set("height", v)}
-        />
+        {/* x/y/width/height sliders */}
+        <div className="space-y-3 pl-3">
+          <SliderHandle nodeId={id} id="x" />
+          <ParamSlider
+            label="X Position (%)"
+            info="Horizontal offset of the crop box from the left edge."
+            value={data.x}
+            defaultValue={0}
+            disabled={isXConnected}
+            onChange={(v) => set("x", v)}
+          />
+          <SliderHandle nodeId={id} id="y" />
+          <ParamSlider
+            label="Y Position (%)"
+            info="Vertical offset of the crop box from the top edge."
+            value={data.y}
+            defaultValue={0}
+            disabled={isYConnected}
+            onChange={(v) => set("y", v)}
+          />
+          <SliderHandle nodeId={id} id="width" />
+          <ParamSlider
+            label="Width (%)"
+            info="Width of the crop box."
+            value={data.width}
+            min={1}
+            defaultValue={100}
+            disabled={isWidthConnected}
+            onChange={(v) => set("width", v)}
+          />
+          <SliderHandle nodeId={id} id="height" />
+          <ParamSlider
+            label="Height (%)"
+            info="Height of the crop box."
+            value={data.height}
+            min={1}
+            defaultValue={100}
+            disabled={isHeightConnected}
+            onChange={(v) => set("height", v)}
+          />
+        </div>
 
         {/* Output */}
         <div className="mt-4 border-t border-gray-100 pt-4">
@@ -155,11 +256,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             <div className="min-h-[100px] rounded-lg border border-gray-200 bg-gray-50 p-2">
               {data.outputImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={data.outputImageUrl}
-                  alt="cropped output"
-                  className="h-full w-full rounded object-cover"
-                />
+                <img src={data.outputImageUrl} alt="cropped output" className="h-full w-full rounded object-cover" />
               ) : (
                 <div className="py-8 text-center text-xs text-gray-400">
                   {isRunning ? "Processing (30s+)..." : "No output yet"}
@@ -167,6 +264,11 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
               )}
             </div>
             {data.error && <p className="mt-1 text-[10px] text-red-500">{data.error}</p>}
+
+            <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-gray-400">
+              <Coins className="h-3 w-3" />
+              ~0.005 M
+            </div>
           </div>
         </div>
       </div>
@@ -174,42 +276,12 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
   );
 }
 
-function CropParamField({
-  nodeId,
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  nodeId: string;
-  id: string;
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  const isConnected = useCanvasStore((s) =>
-    s.isHandleConnected(nodeId, id)
-  );
+/** Renders just the absolutely-positioned typed handle dot for a slider row. */
+function SliderHandle({ nodeId, id }: { nodeId: string; id: string }) {
   return (
-    <div className="relative" style={{ overflow: "visible" }}>
-      <div className="absolute flex items-center" style={{ left: -22, top: 20 }}>
+    <div className="relative h-0" style={{ overflow: "visible" }}>
+      <div className="absolute flex items-center" style={{ left: -34, top: -6 }}>
         <TypedHandle type="target" position={Position.Left} id={id} dataType="number" />
-      </div>
-      <div className="flex items-center gap-3 pl-3">
-        <span className="w-28 shrink-0 truncate text-xs text-gray-500">{label}</span>
-        <input
-          type="number"
-          min={0}
-          max={100}
-          value={value}
-          disabled={isConnected}
-          onChange={(e) =>
-            onChange(Math.max(0, Math.min(100, Number(e.target.value))))
-          }
-          className={`nodrag h-9 w-full rounded-lg border border-gray-200 bg-[#F5F5F5] px-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500 ${
-            isConnected ? "cursor-not-allowed opacity-50" : ""
-          }`}
-        />
       </div>
     </div>
   );
