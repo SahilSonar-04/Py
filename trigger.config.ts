@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 export default defineConfig({
-  project: process.env.TRIGGER_PROJECT_ID ,
+  project: process.env.TRIGGER_PROJECT_ID  || "Project_Undefined",
   runtime: "node",
   logLevel: "log",
   maxDuration: 120, // seconds - covers the mandatory 30s+ Crop Image delay comfortably

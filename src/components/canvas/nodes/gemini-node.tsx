@@ -9,6 +9,15 @@ import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
 
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+
+  const isPromptConnected = useCanvasStore((s) =>
+    s.isHandleConnected(id, "prompt")
+  );
+
+  const isSystemPromptConnected = useCanvasStore((s) =>
+    s.isHandleConnected(id, "system_prompt")
+  );
+
   const [uploading, setUploading] = useState(false);
 
   function set<K extends keyof GeminiData>(key: K, value: GeminiData[K]) {
@@ -107,7 +116,10 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
             onChange={(e) => set("prompt", e.target.value)}
             placeholder="Enter your prompt..."
             rows={3}
-            className="nodrag nowheel ml-3 w-[calc(100%-0.75rem)] resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] p-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+            disabled={isPromptConnected}
+            className={`nodrag nowheel ml-3 w-[calc(100%-0.75rem)] resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] p-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500 ${
+              isPromptConnected ? "cursor-not-allowed opacity-50" : ""
+            }`}
           />
         </div>
 
@@ -122,7 +134,10 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
             onChange={(e) => set("systemPrompt", e.target.value)}
             placeholder="You are a helpful assistant..."
             rows={3}
-            className="nodrag nowheel ml-3 w-[calc(100%-0.75rem)] resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] p-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+            disabled={isSystemPromptConnected}
+            className={`nodrag nowheel ml-3 w-[calc(100%-0.75rem)] resize-y rounded-lg border border-gray-200 bg-[#F5F5F5] p-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500 ${
+              isSystemPromptConnected ? "cursor-not-allowed opacity-50" : ""
+            }`}
           />
         </div>
 

@@ -10,7 +10,9 @@ import type { CropImageData } from "@/types/workflow";
 export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const [uploading, setUploading] = useState(false);
-
+  const isInputImageConnected = useCanvasStore((s) =>
+    s.isHandleConnected(id, "input_image")
+  );
   function set<K extends keyof CropImageData>(key: K, value: CropImageData[K]) {
     updateNodeData(id, { [key]: value });
   }
@@ -101,13 +103,20 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
                   className="mb-2 h-20 w-full rounded-lg border border-gray-200 object-cover"
                 />
               )}
-              <label className="nodrag flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700">
+              <label
+                className={`nodrag flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs ${
+                  isInputImageConnected
+                    ? "cursor-not-allowed opacity-50"
+                    : "cursor-pointer hover:border-gray-400 hover:text-gray-700"
+                }`}
+              >
                 <Upload className="h-3.5 w-3.5" />
                 <span>{uploading ? "Uploading..." : "Upload image"}</span>
                 <input
                   type="file"
                   accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
                   hidden
+                  disabled={isInputImageConnected}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleFile(file);
@@ -119,15 +128,17 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
         </div>
 
         {/* x/y/width/height params */}
-        <CropParamField id="x" label="X Position (%)" value={data.x} onChange={(v) => set("x", v)} />
-        <CropParamField id="y" label="Y Position (%)" value={data.y} onChange={(v) => set("y", v)} />
+        <CropParamField nodeId ={id} id="x" label="X Position (%)" value={data.x} onChange={(v) => set("x", v)} />
+        <CropParamField nodeId={id} id="y" label="Y Position (%)" value={data.y} onChange={(v) => set("y", v)} />
         <CropParamField
+          nodeId={id}
           id="width"
           label="Width (%)"
           value={data.width}
           onChange={(v) => set("width", v)}
         />
         <CropParamField
+          nodeId={id}
           id="height"
           label="Height (%)"
           value={data.height}
@@ -164,16 +175,21 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
 }
 
 function CropParamField({
+  nodeId,
   id,
   label,
   value,
   onChange,
 }: {
+  nodeId: string;
   id: string;
   label: string;
   value: number;
   onChange: (v: number) => void;
 }) {
+  const isConnected = useCanvasStore((s) =>
+    s.isHandleConnected(nodeId, id)
+  );
   return (
     <div className="relative" style={{ overflow: "visible" }}>
       <div className="absolute flex items-center" style={{ left: -22, top: 20 }}>
@@ -186,8 +202,13 @@ function CropParamField({
           min={0}
           max={100}
           value={value}
-          onChange={(e) => onChange(Math.max(0, Math.min(100, Number(e.target.value))))}
-          className="nodrag h-9 w-full rounded-lg border border-gray-200 bg-[#F5F5F5] px-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500"
+          disabled={isConnected}
+          onChange={(e) =>
+            onChange(Math.max(0, Math.min(100, Number(e.target.value))))
+          }
+          className={`nodrag h-9 w-full rounded-lg border border-gray-200 bg-[#F5F5F5] px-3 text-sm text-gray-900 outline-none focus:border-workflow-accent-500 ${
+            isConnected ? "cursor-not-allowed opacity-50" : ""
+          }`}
         />
       </div>
     </div>

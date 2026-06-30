@@ -8,7 +8,11 @@ import {
 } from "reactflow";
 import { nanoid } from "nanoid";
 import type { PyNode, PyEdge, ExecStatus } from "@/types/workflow";
-import { NODE_INPUT_TYPES, NODE_OUTPUT_TYPES, type HandleDataType } from "@/types/workflow";
+import {
+  NODE_INPUT_TYPES,
+  NODE_OUTPUT_TYPES,
+  type HandleDataType,
+} from "@/types/workflow";
 
 interface HistoryEntry {
   nodes: PyNode[];
@@ -28,7 +32,12 @@ interface CanvasState {
   isDirty: boolean;
   isRunning: boolean;
 
-  setWorkflow: (workflowId: string, name: string, nodes: PyNode[], edges: PyEdge[]) => void;
+  setWorkflow: (
+    workflowId: string,
+    name: string,
+    nodes: PyNode[],
+    edges: PyEdge[]
+  ) => void;
   setNodes: (nodes: PyNode[]) => void;
   setEdges: (edges: PyEdge[]) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -36,11 +45,17 @@ interface CanvasState {
   onConnect: (connection: Connection) => void;
 
   addNode: (node: PyNode) => void;
-  updateNodeData: (nodeId: string, partialData: Record<string, unknown>) => void;
+  updateNodeData: (
+    nodeId: string,
+    partialData: Record<string, unknown>
+  ) => void;
   removeNode: (nodeId: string) => void;
   setNodeStatus: (nodeId: string, status: ExecStatus) => void;
 
   setSelectedNodeIds: (ids: string[]) => void;
+
+  // Added
+  isHandleConnected: (nodeId: string, handleId: string) => boolean;
 
   pushHistory: () => void;
   undo: () => void;
@@ -64,7 +79,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   isRunning: false,
 
   setWorkflow: (workflowId, name, nodes, edges) =>
-    set({ workflowId, workflowName: name, nodes, edges, past: [], future: [], isDirty: false }),
+    set({
+      workflowId,
+      workflowName: name,
+      nodes,
+      edges,
+      past: [],
+      future: [],
+      isDirty: false,
+    }),
 
   setNodes: (nodes) => set({ nodes, isDirty: true }),
   setEdges: (edges) => set({ edges, isDirty: true }),
@@ -74,11 +97,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (c.type === "remove" && LOCKED_NODE_IDS.has(c.id)) return false;
       return true;
     });
-    set((state) => ({ nodes: applyNodeChanges(filtered, state.nodes) as PyNode[], isDirty: true }));
+    set((state) => ({
+      nodes: applyNodeChanges(filtered, state.nodes) as PyNode[],
+      isDirty: true,
+    }));
   },
 
   onEdgesChange: (changes) => {
-    set((state) => ({ edges: applyEdgeChanges(changes, state.edges), isDirty: true }));
+    set((state) => ({
+      edges: applyEdgeChanges(changes, state.edges),
+      isDirty: true,
+    }));
   },
 
   onConnect: (connection) => {
@@ -94,7 +123,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const targetType = getInputType(targetNode, connection.targetHandle);
     if (!isCompatible(sourceType, targetType)) return;
 
-    if (wouldCreateCycle(edges, connection.source, connection.target)) return;
+    // Only "image" / "any" targets accept multiple incoming edges (vision fan-in).
+    // Every other handle type replaces any existing edge into that target handle.
+    const allowsMulti = targetType === "image" || targetType === "any";
+    const filteredEdges = allowsMulti
+      ? edges
+      : edges.filter(
+          (e) =>
+            !(
+              e.target === connection.target &&
+              e.targetHandle === connection.targetHandle
+            )
+        );
+
+    if (
+      wouldCreateCycle(filteredEdges, connection.source, connection.target)
+    )
+      return;
 
     const newEdge: PyEdge = {
       id: `edge_${nanoid(10)}`,
@@ -107,18 +152,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     };
 
     get().pushHistory();
-    set((state) => ({ edges: [...state.edges, newEdge], isDirty: true }));
+    set({ edges: [...filteredEdges, newEdge], isDirty: true });
   },
 
   addNode: (node) => {
     get().pushHistory();
-    set((state) => ({ nodes: [...state.nodes, node], isDirty: true }));
+    set((state) => ({
+      nodes: [...state.nodes, node],
+      isDirty: true,
+    }));
   },
 
   updateNodeData: (nodeId, partialData) => {
     set((state) => ({
       nodes: state.nodes.map((n) =>
-        n.id === nodeId ? { ...n, data: { ...n.data, ...partialData } } : n
+        n.id === nodeId
+          ? { ...n, data: { ...n.data, ...partialData } }
+          : n
       ),
       isDirty: true,
     }));
@@ -129,7 +179,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     get().pushHistory();
     set((state) => ({
       nodes: state.nodes.filter((n) => n.id !== nodeId),
-      edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      edges: state.edges.filter(
+        (e) => e.source !== nodeId && e.target !== nodeId
+      ),
       isDirty: true,
     }));
   },
@@ -137,16 +189,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setNodeStatus: (nodeId, status) => {
     set((state) => ({
       nodes: state.nodes.map((n) =>
-        n.id === nodeId ? { ...n, data: { ...n.data, status } } : n
+        n.id === nodeId
+          ? { ...n, data: { ...n.data, status } }
+          : n
       ),
     }));
   },
 
   setSelectedNodeIds: (ids) => set({ selectedNodeIds: ids }),
 
+  // Added
+  isHandleConnected: (nodeId, handleId) =>
+    get().edges.some(
+      (e) => e.target === nodeId && e.targetHandle === handleId
+    ),
+
   pushHistory: () => {
     const { nodes, edges, past } = get();
-    set({ past: [...past.slice(-49), { nodes, edges }], future: [] });
+    set({
+      past: [...past.slice(-49), { nodes, edges }],
+      future: [],
+    });
   },
 
   undo: () => {
@@ -179,7 +242,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   markSaved: () => set({ isDirty: false }),
 }));
 
-function getOutputType(node: PyNode, handle: string | null | undefined): HandleDataType {
+function getOutputType(
+  node: PyNode,
+  handle: string | null | undefined
+): HandleDataType {
   if (!handle) return "any";
   if (node.type === "request") {
     const data = node.data as { fields: { id: string; type: string }[] };
@@ -189,12 +255,18 @@ function getOutputType(node: PyNode, handle: string | null | undefined): HandleD
   return NODE_OUTPUT_TYPES[`${node.type}:${handle}`] ?? "any";
 }
 
-function getInputType(node: PyNode, handle: string | null | undefined): HandleDataType {
+function getInputType(
+  node: PyNode,
+  handle: string | null | undefined
+): HandleDataType {
   if (!handle) return "any";
   return NODE_INPUT_TYPES[`${node.type}:${handle}`] ?? "any";
 }
 
-function isCompatible(source: HandleDataType, target: HandleDataType): boolean {
+function isCompatible(
+  source: HandleDataType,
+  target: HandleDataType
+): boolean {
   if (source === "any" || target === "any") return true;
   return source === target;
 }
@@ -213,7 +285,11 @@ function colorForType(type: HandleDataType): string {
   return map[type];
 }
 
-function wouldCreateCycle(edges: PyEdge[], source: string, target: string): boolean {
+function wouldCreateCycle(
+  edges: PyEdge[],
+  source: string,
+  target: string
+): boolean {
   const adjacency = new Map<string, string[]>();
   for (const e of edges) {
     const list = adjacency.get(e.source) ?? [];

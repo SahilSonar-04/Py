@@ -1,10 +1,20 @@
 import type { Edge, Node } from "reactflow";
 
 // ---------- Node type identifiers ----------
-export type PyNodeType = "request" | "crop_image" | "gemini" | "response";
+export type PyNodeType = "request" | "crop_image" | "gemini" | "response" | "sticky_note";
+export type StickyNoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "orange";
+export type StickyNoteFont = "sans" | "serif" | "mono" | "cursive";
 
 // ---------- Request-Inputs node ----------
 export type RequestFieldType = "text_field" | "image_field";
+
+export interface StickyNoteData {
+  text: string;
+  color: StickyNoteColor;
+  bold: boolean;
+  fontSize: number; // px, clamp 12-48
+  font: StickyNoteFont;
+}
 
 export interface RequestField {
   id: string;
@@ -74,7 +84,8 @@ export type PyNodeData =
   | RequestInputsData
   | CropImageData
   | GeminiData
-  | ResponseData;
+  | ResponseData
+  | StickyNoteData;
 
 export type PyNode = Node<PyNodeData, PyNodeType>;
 export type PyEdge = Edge;
