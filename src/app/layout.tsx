@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
@@ -12,19 +13,14 @@ const LINKEDIN_URL =
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider>
       <html lang="en" className="h-full antialiased">
         <body className="min-h-full flex flex-col hide-scrollbar">
-          {/* Required: exactly one console.log on initial client render of every page */}
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `console.log("[Py] Candidate LinkedIn:\\n${LINKEDIN_URL}");`,
-            }}
-          />
+          <Script id="candidate-log" strategy="afterInteractive">
+            {`console.log("[Py] Candidate LinkedIn:\\n${LINKEDIN_URL}");`}
+          </Script>
           {children}
         </body>
       </html>

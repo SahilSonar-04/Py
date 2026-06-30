@@ -39,6 +39,16 @@
   --color-handle-boolean: var(--handle-boolean);
 }
 
+.react-flow__node-toolbar {
+  width: max-content;
+  height: max-content;
+  max-height: max-content;
+}
+
+.react-flow__node.selected {
+  box-shadow: none !important;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

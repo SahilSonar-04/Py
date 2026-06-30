@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Plus, Workflow as WorkflowIcon, Pencil, Trash2, Loader2 } from "lucide-react";
@@ -11,6 +11,14 @@ interface WorkflowSummary {
   status: string;
   createdAt: string;
   updatedAt: string;
+}
+
+function ClientFormattedDate({ iso }: { iso: string }) {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    setText(new Date(iso).toLocaleString());
+  }, [iso]);
+  return <>{text ?? "—"}</>;
 }
 
 export function DashboardClient({ initialWorkflows }: { initialWorkflows: WorkflowSummary[] }) {
@@ -155,7 +163,7 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">
-                      {new Date(w.updatedAt).toLocaleString()}
+                      <ClientFormattedDate iso={w.updatedAt} />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">

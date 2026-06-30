@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NodeToolbar, Position, type NodeProps } from "reactflow";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { StickyNoteColor, StickyNoteData, StickyNoteFont } from "@/types/workflow";
@@ -23,8 +23,8 @@ const FONT_MAP: Record<StickyNoteFont, string> = {
 
 export function StickyNoteNode({ id, data, selected }: NodeProps<StickyNoteData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
-  const removeNode = useCanvasStore((s) => s.removeNode);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   function set<K extends keyof StickyNoteData>(key: K, value: StickyNoteData[K]) {
     updateNodeData(id, { [key]: value });
@@ -32,9 +32,20 @@ export function StickyNoteNode({ id, data, selected }: NodeProps<StickyNoteData>
 
   const fontSize = data.fontSize ?? 14;
 
+  // The textarea doesn't exist in the DOM until isEditing flips true, so we
+  // focus it in an effect rather than directly in the double-click handler.
+  useEffect(() => {
+    if (!isEditing) return;
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [isEditing]);
+
   return (
     <>
-      <NodeToolbar position={Position.Top} isVisible={selected} offset={14}>
+      <NodeToolbar position={Position.Right} align="center" isVisible={selected} offset={14}>
         <div className="flex flex-col gap-1.5 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
           <div className="flex flex-col gap-1">
             {(Object.keys(COLOR_MAP) as StickyNoteColor[]).map((c) => (
@@ -105,30 +116,49 @@ export function StickyNoteNode({ id, data, selected }: NodeProps<StickyNoteData>
       </NodeToolbar>
 
       <div
-        className="h-[160px] w-[200px] rounded-xl p-2.5 shadow-sm transition-shadow cursor-grab active:cursor-grabbing"
+        className={`h-[160px] w-[200px] rounded-xl p-2.5 shadow-sm transition-shadow ${
+          isEditing ? "" : "cursor-grab active:cursor-grabbing"
+        }`}
         style={{
           backgroundColor: COLOR_MAP[data.color],
-          boxShadow: selected ? "rgb(163,163,163) 0px 0px 0px 2px" : undefined,
+          boxShadow: selected
+            ? "0 0 0 2px var(--workflow-accent-500), 0 0 16px 2px rgba(99,102,241,0.45)"
+            : undefined,
         }}
-        onDoubleClick={() => textareaRef.current?.focus()}
+        onDoubleClick={() => setIsEditing(true)}
       >
-        <textarea
-          ref={textareaRef}
-          value={data.text}
-          onChange={(e) => set("text", e.target.value)}
-          placeholder="Type a note..."
-          className={`nodrag nowheel h-full w-full resize-none rounded-lg border-none bg-transparent p-3 leading-relaxed text-gray-800 outline-none transition-colors placeholder:font-normal placeholder:text-gray-400/60 ${
-            data.bold ? "font-bold" : "font-normal"
-          }`}
-          style={{ fontFamily: FONT_MAP[data.font], fontSize }}
-          onKeyDown={(e) => {
-            if (e.key === "Delete" || e.key === "Backspace") e.stopPropagation();
-            if ((e.key === "Backspace" || e.key === "Delete") && data.text === "") {
-              // allow blank-note quick delete only when explicitly empty + double-tap not required here
-            }
-          }}
-        />
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={data.text}
+            onChange={(e) => set("text", e.target.value)}
+            onBlur={() => setIsEditing(false)}
+            placeholder="Type a note..."
+            className={`nodrag nowheel h-full w-full resize-none rounded-lg border-none bg-transparent p-3 leading-relaxed text-gray-800 outline-none transition-colors placeholder:font-normal placeholder:text-gray-400/60 ${
+              data.bold ? "font-bold" : "font-normal"
+            }`}
+            style={{ fontFamily: FONT_MAP[data.font], fontSize }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setIsEditing(false);
+              }
+              // Stop Delete/Backspace (and everything else) from bubbling up
+              // to the canvas's "delete selected node" global shortcut while typing.
+              e.stopPropagation();
+            }}
+          />
+        ) : (
+          <div
+            className={`h-full w-full select-none overflow-hidden whitespace-pre-wrap break-words rounded-lg p-3 leading-relaxed ${
+              data.text ? "text-gray-800" : "text-gray-400/60"
+            } ${data.bold ? "font-bold" : "font-normal"}`}
+            style={{ fontFamily: FONT_MAP[data.font], fontSize }}
+          >
+            {data.text || "Type a note..."}
+          </div>
+        )}
       </div>
     </>
   );
-}   
+}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileText, Plus } from "lucide-react";
 import { nanoid } from "nanoid";
+import { useReactFlow } from "reactflow";
 import { NodePicker } from "./node-picker";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { StickyNoteData } from "@/types/workflow";
@@ -11,15 +12,24 @@ export function BottomToolbar() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const addNode = useCanvasStore((s) => s.addNode);
   const nodes = useCanvasStore((s) => s.nodes);
+  const { screenToFlowPosition } = useReactFlow();
 
+  function spawnPosition() {
+    const center = screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+    return {
+      x: center.x - 100 + (Math.random() * 40 - 20),
+      y: center.y - 80 + (Math.random() * 40 - 20),
+    };
+  }
   function addStickyNote() {
     const id = `sticky_note_${nanoid(8)}`;
-    const offsetX = 480 + (nodes.length % 4) * 60;
-    const offsetY = -200 + (nodes.length % 5) * 120;
     addNode({
       id,
       type: "sticky_note",
-      position: { x: offsetX, y: offsetY },
+      position: spawnPosition(),
       data: { text: "", color: "yellow", bold: false, fontSize: 14, font: "sans" } as StickyNoteData,
     });
   }

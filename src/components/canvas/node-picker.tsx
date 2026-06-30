@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Search, Crop, Sparkles, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useCanvasStore } from "@/store/canvas-store";
@@ -108,7 +109,7 @@ export function NodePicker({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  return (
+  const content = (
     <div
       className="fixed inset-0 z-[100] flex items-end justify-center bg-black/20 sm:items-center"
       onClick={onClose}
@@ -169,4 +170,7 @@ export function NodePicker({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(content, document.body);
 }
