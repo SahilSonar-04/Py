@@ -221,7 +221,7 @@ function edge(
     target,
     sourceHandle,
     targetHandle,
-    animated: true,
+    animated: false,
     style: { stroke: colorMap[kind], strokeWidth: 2 },
   };
 }

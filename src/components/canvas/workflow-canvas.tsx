@@ -5,13 +5,16 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
+  ConnectionLineType,
   MiniMap,
   ReactFlowProvider,
+  type Connection,
   type OnSelectionChangeParams,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { useCanvasStore } from "@/store/canvas-store";
+import { useCanvasStore, isConnectionValid } from "@/store/canvas-store";
 import { nodeTypes } from "./node-types";
+import { edgeTypes } from "./edge-types";
 import { BottomToolbar } from "./bottom-toolbar";
 import { TopRightControls } from "./top-right-controls";
 import { WorkflowHeader } from "./workflow-header";
@@ -19,6 +22,12 @@ import { HistoryPanel } from "./history-panel";
 import type { PyEdge, PyNode } from "@/types/workflow";
 
 const LOCKED_NODE_IDS = new Set(["request-inputs", "response"]);
+
+type ConnectingInfo = {
+  nodeId: string;
+  handleId: string | null;
+  handleType: "source" | "target";
+};
 
 export function WorkflowCanvas({
   workflowId,
@@ -62,6 +71,7 @@ function CanvasInner({
     onConnect,
     setWorkflow,
     setSelectedNodeIds,
+    setHoveredEdgeId,
     removeNode,
     undo,
     redo,
@@ -73,7 +83,9 @@ function CanvasInner({
   } = useCanvasStore();
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [connectionInvalid, setConnectionInvalid] = useState(false);
   const initialized = useRef(false);
+  const connectingRef = useRef<ConnectingInfo | null>(null);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -126,6 +138,99 @@ function CanvasInner({
     [setSelectedNodeIds]
   );
 
+  // --- Edge hover (for the delete × button) ---
+  const onEdgeMouseEnter = useCallback(
+    (_: unknown, edge: PyEdge) => setHoveredEdgeId(edge.id),
+    [setHoveredEdgeId]
+  );
+  const onEdgeMouseLeave = useCallback(
+    () => setHoveredEdgeId(null),
+    [setHoveredEdgeId]
+  );
+
+  // --- Live invalid-connection feedback (red dashed line while dragging) ---
+  const onConnectStart = useCallback(
+    (
+      _: unknown,
+      params: { nodeId: string | null; handleId: string | null; handleType: string | null }
+    ) => {
+      if (!params.nodeId) return;
+      connectingRef.current = {
+        nodeId: params.nodeId,
+        handleId: params.handleId,
+        handleType: (params.handleType as "source" | "target") ?? "source",
+      };
+      setConnectionInvalid(false);
+    },
+    []
+  );
+
+  const onConnectEnd = useCallback(() => {
+    connectingRef.current = null;
+    setConnectionInvalid(false);
+  }, []);
+
+  useEffect(() => {
+    function handlePointerMove(e: PointerEvent) {
+      const connecting = connectingRef.current;
+      if (!connecting) return;
+
+      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const handleEl = el?.closest(".react-flow__handle") as HTMLElement | null;
+
+      if (!handleEl) {
+        setConnectionInvalid(false);
+        return;
+      }
+
+      const targetNodeId = handleEl.getAttribute("data-nodeid");
+      const targetHandleId = handleEl.getAttribute("data-handleid");
+      const targetHandleType: "source" | "target" = handleEl.classList.contains("source")
+        ? "source"
+        : "target";
+
+      if (!targetNodeId) {
+        setConnectionInvalid(false);
+        return;
+      }
+
+      const { nodes: currentNodes } = useCanvasStore.getState();
+      const valid = isConnectionValid(
+        currentNodes,
+        connecting.nodeId,
+        connecting.handleId,
+        connecting.handleType,
+        targetNodeId,
+        targetHandleId,
+        targetHandleType
+      );
+      setConnectionInvalid(!valid);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, []);
+
+  const isValidConnectionFn = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return false;
+      return isConnectionValid(
+        nodes,
+        connection.source,
+        connection.sourceHandle ?? null,
+        "source",
+        connection.target,
+        connection.targetHandle ?? null,
+        "target"
+      );
+    },
+    [nodes]
+  );
+
+  const connectionLineStyle = connectionInvalid
+    ? { stroke: "#ef4444", strokeWidth: 2.5, strokeDasharray: "6 4" }
+    : { stroke: "#6366f1", strokeWidth: 2.5 };
+
   useEffect(() => {
     if (!isRunning) return;
     let cancelled = false;
@@ -169,8 +274,16 @@ function CanvasInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
+        onEdgeMouseEnter={onEdgeMouseEnter}
+        onEdgeMouseLeave={onEdgeMouseLeave}
+        isValidConnection={isValidConnectionFn}
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        connectionLineType={ConnectionLineType.Bezier}
+        connectionLineStyle={connectionLineStyle}
         nodesDraggable
         deleteKeyCode={null}
         fitView

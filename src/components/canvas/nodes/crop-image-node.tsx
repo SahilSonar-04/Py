@@ -7,7 +7,6 @@ import {
   Loader2,
   Upload,
   Crop,
-  Info,
   RotateCcw,
   MoreHorizontal,
   X,
@@ -16,12 +15,16 @@ import {
 import { TypedHandle } from "./typed-handle";
 import { ParamSlider } from "./param-slider";
 import { ImageUploadFlyout } from "./image-upload-flyout";
+import { InfoTooltip } from "./info-tooltip";
+import { NodeOptionsMenu } from "./node-options-menu";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { CropImageData } from "@/types/workflow";
 
 export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
-  const removeNode = useCanvasStore((s) => s.removeNode);
+  const isLocked = useCanvasStore(
+    (s) => s.nodes.find((n) => n.id === id)?.draggable === false
+  );
   const [uploading, setUploading] = useState(false);
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -96,12 +99,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="group/tip relative">
-            <Info className="h-3.5 w-3.5 cursor-default text-gray-400" />
-            <span className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden w-max max-w-[220px] rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] text-gray-700 shadow-lg group-hover/tip:block">
-              Crops an image to a percentage-based bounding box.
-            </span>
-          </span>
+          <InfoTooltip text="Crop an image to specified dimensions" side="bottom" />
           <button
             title="Reset all parameters"
             onClick={() => updateNodeData(id, { x: 0, y: 0, width: 100, height: 100 })}
@@ -124,19 +122,12 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
-            {menuOpen && (
-              <div className="nodrag absolute right-0 top-9 z-50 w-32 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    removeNode(id);
-                  }}
-                  className="block w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
-                >
-                  Delete
-                </button>
-              </div>
-            )}
+            <NodeOptionsMenu
+              nodeId={id}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              locked={isLocked}
+            />
           </div>
         </div>
       </div>
@@ -182,7 +173,6 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
               <div className="relative mt-2 overflow-hidden rounded-lg border border-indigo-300">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={data.inputImageUrl} alt="input" className="block w-full" />
-                {/* Live crop-box overlay, driven by the sliders below */}
                 <div
                   className="pointer-events-none absolute border-2 border-indigo-500 bg-indigo-500/10"
                   style={{
@@ -227,7 +217,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
           <SliderHandle nodeId={id} id="width" />
           <ParamSlider
             label="Width (%)"
-            info="Width of the crop box."
+            info="Crop width as a percentage of the original image."
             value={data.width}
             min={1}
             defaultValue={100}
@@ -237,7 +227,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
           <SliderHandle nodeId={id} id="height" />
           <ParamSlider
             label="Height (%)"
-            info="Height of the crop box."
+            info="Crop height as a percentage of the original image."
             value={data.height}
             min={1}
             defaultValue={100}

@@ -1,6 +1,7 @@
 "use client";
 
-import { Info, RotateCcw, Plus } from "lucide-react";
+import { RotateCcw, Plus } from "lucide-react";
+import { InfoTooltip } from "./info-tooltip";
 
 export function ParamSlider({
   label,
@@ -29,14 +30,7 @@ export function ParamSlider({
     <div className="flex items-center gap-2">
       <div className="flex w-[110px] shrink-0 items-center gap-1 text-xs text-gray-600">
         <span className="truncate">{label}</span>
-        {info && (
-          <span className="group/tip relative">
-            <Info className="h-3 w-3 cursor-default text-gray-400" />
-            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 hidden w-max max-w-[200px] -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] text-gray-700 shadow-lg group-hover/tip:block">
-              {info}
-            </span>
-          </span>
-        )}
+        {info && <InfoTooltip text={info} side="right" />}
       </div>
 
       <div className="nodrag relative flex-1">

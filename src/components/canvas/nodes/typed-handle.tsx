@@ -27,19 +27,31 @@ export function TypedHandle({
 }) {
   const color = COLOR_MAP[dataType];
   return (
-    <Handle
-      type={type}
-      position={position}
-      id={id}
-      style={{
-        width: 14,
-        height: 14,
-        borderRadius: 9999,
-        background: color,
-        border: `2px solid ${color}80`,
-        boxShadow: `0 0 8px ${color}50`,
-        ...style,
-      }}
-    />
+    // Sized to exactly match the 14px dot so the Handle's own internal
+    // centering math (which positions it relative to the nearest
+    // positioned ancestor) lands in the same spot it always has.
+    <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
+      {/* Soft halo, hidden by default — revealed via .node-card:hover in
+          globals.css. Adjacent handles' halos overlap slightly, which is
+          what creates the "connected glow line" look down the node edge. */}
+      <span
+        className="handle-halo"
+        style={{ backgroundColor: `${color}2e`, boxShadow: `0 0 0 1px ${color}33` }}
+      />
+      <Handle
+        type={type}
+        position={position}
+        id={id}
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: 9999,
+          background: color,
+          border: `2px solid ${color}80`,
+          boxShadow: `0 0 8px ${color}50`,
+          ...style,
+        }}
+      />
+    </span>
   );
 }

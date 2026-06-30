@@ -25,6 +25,9 @@ interface CanvasState {
   nodes: PyNode[];
   edges: PyEdge[];
   selectedNodeIds: string[];
+  hoveredEdgeId: string | null;
+  duplicateNode: (nodeId: string, withEdges: boolean) => void;
+  toggleNodeLock: (nodeId: string) => void;
 
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -53,6 +56,7 @@ interface CanvasState {
   setNodeStatus: (nodeId: string, status: ExecStatus) => void;
 
   setSelectedNodeIds: (ids: string[]) => void;
+  setHoveredEdgeId: (id: string | null) => void;
 
   // Added
   isHandleConnected: (nodeId: string, handleId: string) => boolean;
@@ -73,6 +77,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeIds: [],
+  hoveredEdgeId: null,
   past: [],
   future: [],
   isDirty: false,
@@ -147,7 +152,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       target: connection.target,
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
-      animated: true,
+      animated: false,
       style: { stroke: colorForType(sourceType), strokeWidth: 2 },
     };
 
@@ -174,6 +179,49 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }));
   },
 
+  duplicateNode: (nodeId, withEdges) => {
+    const { nodes, edges } = get();
+    if (LOCKED_NODE_IDS.has(nodeId)) return; // don't duplicate the singleton nodes
+    const original = nodes.find((n) => n.id === nodeId);
+    if (!original) return;
+
+    const newId = `${original.type}_${nanoid(8)}`;
+    const newNode: PyNode = {
+      ...original,
+      id: newId,
+      position: { x: original.position.x + 40, y: original.position.y + 40 },
+      selected: false,
+      data: { ...original.data, status: "idle", error: undefined } as PyNode["data"],
+    };
+
+    const newEdges: PyEdge[] = withEdges
+      ? edges
+          .filter((e) => e.source === nodeId || e.target === nodeId)
+          .map((e) => ({
+            ...e,
+            id: `edge_${nanoid(10)}`,
+            source: e.source === nodeId ? newId : e.source,
+            target: e.target === nodeId ? newId : e.target,
+          }))
+      : [];
+
+    get().pushHistory();
+    set((state) => ({
+      nodes: [...state.nodes, newNode],
+      edges: [...state.edges, ...newEdges],
+      isDirty: true,
+    }));
+  },
+
+  toggleNodeLock: (nodeId) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId ? { ...n, draggable: n.draggable === false } : n
+      ),
+      isDirty: true,
+    }));
+  },
+  
   removeNode: (nodeId) => {
     if (LOCKED_NODE_IDS.has(nodeId)) return;
     get().pushHistory();
@@ -197,6 +245,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   setSelectedNodeIds: (ids) => set({ selectedNodeIds: ids }),
+  setHoveredEdgeId: (id) => set({ hoveredEdgeId: id }),
 
   // Added
   isHandleConnected: (nodeId, handleId) =>
@@ -306,4 +355,37 @@ function wouldCreateCycle(
     stack.push(...(adjacency.get(current) ?? []));
   }
   return false;
+}
+
+/**
+ * Standalone validity check usable outside onConnect (e.g. live drag-feedback,
+ * isValidConnection prop) — given two endpoints with explicit handle "roles"
+ * (source/target), resolves which is the real output and which the real
+ * input and checks type compatibility + same-node rejection.
+ */
+export function isConnectionValid(
+  nodes: PyNode[],
+  aNodeId: string,
+  aHandle: string | null,
+  aType: "source" | "target",
+  bNodeId: string,
+  bHandle: string | null,
+  bType: "source" | "target"
+): boolean {
+  if (!aNodeId || !bNodeId) return false;
+  if (aNodeId === bNodeId) return false;
+  if (aType === bType) return false; // can't link two sources or two targets
+
+  const sourceNodeId = aType === "source" ? aNodeId : bNodeId;
+  const sourceHandle = aType === "source" ? aHandle : bHandle;
+  const targetNodeId = aType === "target" ? aNodeId : bNodeId;
+  const targetHandle = aType === "target" ? aHandle : bHandle;
+
+  const sourceNode = nodes.find((n) => n.id === sourceNodeId);
+  const targetNode = nodes.find((n) => n.id === targetNodeId);
+  if (!sourceNode || !targetNode) return false;
+
+  const sourceType = getOutputType(sourceNode, sourceHandle);
+  const targetType = getInputType(targetNode, targetHandle);
+  return isCompatible(sourceType, targetType);
 }

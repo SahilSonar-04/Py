@@ -118,3 +118,28 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Persistent hover ring on node cards (same treatment as selection) */
+.node-card:hover {
+  box-shadow: 0 0 0 2px var(--workflow-accent-500), 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Soft halo behind each handle, revealed on node hover. Adjacent handles'
+   halos overlap slightly, which is what creates the "connected glow"
+   appearance running down the node's edge in the reference UI. */
+.handle-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 42px;
+  height: 42px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.node-card:hover .handle-halo {
+  opacity: 1;
+}
