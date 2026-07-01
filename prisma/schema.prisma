@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -31,11 +32,10 @@ enum NodeExecStatus {
 
 model Workflow {
   id          String   @id @default(cuid())
-  userId      String // Clerk user id, scopes ownership
+  userId      String
   name        String   @default("Untitled Workflow")
-  // Full React Flow graph (nodes + edges) stored as JSON for simplicity/speed
   graph       Json
-  status      String   @default("idle") // idle | running (quick badge for dashboard)
+  status      String   @default("idle")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -54,7 +54,6 @@ model WorkflowRun {
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
   durationMs Int?
-  // node ids that were targeted for single/partial runs
   targetNodeIds Json?
 
   nodeExecutions NodeExecution[]
@@ -67,8 +66,8 @@ model NodeExecution {
   id          String          @id @default(cuid())
   runId       String
   run         WorkflowRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
-  nodeId      String // React Flow node id
-  nodeType    String // request | crop_image | gemini | response
+  nodeId      String
+  nodeType    String
   nodeLabel   String?
   status      NodeExecStatus  @default(PENDING)
   startedAt   DateTime?
