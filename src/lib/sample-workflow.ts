@@ -42,7 +42,12 @@ export function blankWorkflowGraph(): WorkflowGraph {
  * Request-Inputs -> Crop#1, Crop#2, Gemini#1 (parallel)
  * Gemini#1 -> Gemini#2
  * Gemini#2 + Crop#1 + Crop#2 -> Gemini#3 (final)
- * Gemini#3 + Crop#2 -> Response
+ * Gemini#3 -> Response
+ *
+ * (Crop Image #2 feeds Final Gemini's vision input, same as before - it just
+ * no longer *also* fans out into Response. Response only collects the final
+ * Gemini's text output, and everything shown there is now derived live from
+ * actual edges rather than a manually pre-populated slot list.)
  */
 export function sampleWorkflowGraph(): WorkflowGraph {
   const requestId = "request-inputs";
@@ -175,10 +180,10 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     data: {
       label: "Response",
       locked: true,
-      slots: [
-        { id: "slot-gemini3", label: "gemini_3_1_pro" },
-        { id: "slot-crop2", label: "crop_image" },
-      ],
+      // Intentionally empty - the Response node derives its displayed rows
+      // live from whichever edges actually target its "result" handle, so
+      // nothing needs to be pre-seeded here.
+      slots: [],
     } satisfies ResponseData,
   };
 
@@ -190,8 +195,7 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     edge(gemini2Id, "response", gemini3Id, "prompt", "text"),
     edge(crop1Id, "output_image", gemini3Id, "image", "image"),
     edge(crop2Id, "output_image", gemini3Id, "image", "image"),
-    edge(gemini3Id, "response", responseId, "slot-gemini3", "any"),
-    edge(crop2Id, "output_image", responseId, "slot-crop2", "any"),
+    edge(gemini3Id, "response", responseId, "result", "any"),
   ];
 
   return {

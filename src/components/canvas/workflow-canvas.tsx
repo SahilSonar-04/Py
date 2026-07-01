@@ -10,9 +10,6 @@ import ReactFlow, {
   type Connection,
   type OnSelectionChangeParams,
 } from "reactflow";
-import { BottomLeftControls, useAutoArrange } from "./bottom-left-controls";
-import { KeyboardShortcutsModal } from "./keyboard-shortcuts-modal";
-import { nanoid } from "nanoid";
 import "reactflow/dist/style.css";
 import { useCanvasStore, isConnectionValid } from "@/store/canvas-store";
 import { nodeTypes } from "./node-types";
@@ -22,6 +19,9 @@ import { TopRightControls } from "./top-right-controls";
 import { WorkflowHeader } from "./workflow-header";
 import { HistoryPanel } from "./history-panel";
 import { MinimapToggle } from "./minimap-toggle";
+import { BottomLeftControls, useAutoArrange } from "./bottom-left-controls";
+import { KeyboardShortcutsModal } from "./keyboard-shortcuts-modal";
+import { nanoid } from "nanoid";
 import type {
   NodeExecutionView,
   PyEdge,
@@ -73,11 +73,13 @@ function applyRunExecutionsToStore(nodeExecutions: NodeExecutionView[]) {
       } else if (exec.nodeType === "gemini" && typeof output.response === "string") {
         updateNodeData(exec.nodeId, { response: output.response, error: undefined });
       } else if (exec.nodeType === "response") {
-        // The Response node renders from `data.slots[]`, not from a flat
-        // field - the orchestrator's output for this node type is a map
-        // keyed by target handle id (e.g. { result: "..." } for the
-        // default canvas, or { "slot-gemini3": "...", "slot-crop2": "..." }
-        // for the sample workflow).
+        // The Response node renders from `data.slots[]`, keyed by edge id
+        // (unique per connection). The orchestrator's output for this node
+        // type is a map of edgeId -> { label, value } - see
+        // src/trigger/orchestrator.ts's executeInlineNode for why edgeId is
+        // used instead of targetHandle (every edge into Response shares the
+        // same "result" targetHandle, so targetHandle alone can't
+        // distinguish multiple simultaneous connections).
         const currentNode = useCanvasStore.getState().nodes.find((n) => n.id === exec.nodeId);
         const currentSlots: ResponseSlot[] =
           currentNode && currentNode.type === "response"
@@ -85,14 +87,19 @@ function applyRunExecutionsToStore(nodeExecutions: NodeExecutionView[]) {
             : [];
 
         const nextSlots: ResponseSlot[] = [...currentSlots];
-        for (const [key, value] of Object.entries(output)) {
+        for (const [edgeId, entry] of Object.entries(output)) {
+          const { label, value } = (entry ?? {}) as { label?: string; value?: unknown };
           const stringValue =
             typeof value === "string" ? value : value != null ? JSON.stringify(value) : "";
-          const existingIndex = nextSlots.findIndex((s) => s.id === key);
+          const existingIndex = nextSlots.findIndex((s) => s.id === edgeId);
           if (existingIndex >= 0) {
-            nextSlots[existingIndex] = { ...nextSlots[existingIndex], value: stringValue };
+            nextSlots[existingIndex] = {
+              ...nextSlots[existingIndex],
+              label: label ?? nextSlots[existingIndex].label,
+              value: stringValue,
+            };
           } else {
-            nextSlots.push({ id: key, label: key, value: stringValue });
+            nextSlots.push({ id: edgeId, label: label ?? edgeId, value: stringValue });
           }
         }
 
@@ -513,16 +520,15 @@ function CanvasInner({
       />
       <BottomToolbar historyOpen={historyOpen} />
       <div className="pointer-events-none absolute bottom-4 left-4 z-20">
-      <BottomLeftControls
-        selectMode={selectMode}
-        onToggleSelectMode={() => setSelectMode((v) => !v)}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
-      />
-    </div>
+        <BottomLeftControls
+          selectMode={selectMode}
+          onToggleSelectMode={() => setSelectMode((v) => !v)}
+          onOpenShortcuts={() => setShortcutsOpen(true)}
+        />
+      </div>
       <MinimapToggle historyOpen={historyOpen} />
       <HistoryPanel workflowId={workflowId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
       {shortcutsOpen && <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />}
-
     </div>
   );
 }

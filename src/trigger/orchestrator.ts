@@ -2,6 +2,7 @@ import { task, runs } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/prisma";
 import { cropImageTask, type CropImagePayload } from "./crop-image";
 import { geminiTask, type GeminiTaskPayload } from "./gemini";
+import { labelForResponseSource } from "@/lib/response-label";
 import type { PyEdge, PyNode } from "@/types/workflow";
 
 export interface OrchestratorPayload {
@@ -12,6 +13,7 @@ export interface OrchestratorPayload {
 }
 
 type DepEdge = {
+  edgeId: string;
   sourceNodeId: string;
   sourceHandle: string | null;
   targetHandle: string | null;
@@ -57,6 +59,7 @@ export const orchestratorTask = task({
     for (const edge of edges) {
       const list = upstream.get(edge.target) ?? [];
       list.push({
+        edgeId: edge.id,
         sourceNodeId: edge.source,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
@@ -128,7 +131,7 @@ export const orchestratorTask = task({
         await Promise.all(
           inlineIds.map(async (nodeId) => {
             const node = nodeMap.get(nodeId)!;
-            const output = await executeInlineNode(runId, node, depsFor(nodeId));
+            const output = await executeInlineNode(runId, node, depsFor(nodeId), nodeMap);
             outputs.set(nodeId, output);
           })
         );
@@ -177,7 +180,8 @@ export const orchestratorTask = task({
 async function executeInlineNode(
   runId: string,
   node: PyNode,
-  deps: ResolvedDep[]
+  deps: ResolvedDep[],
+  nodeMap: Map<string, PyNode>
 ): Promise<Record<string, unknown>> {
   const nodeExec = await prisma.nodeExecution.create({
     data: {
@@ -199,11 +203,18 @@ async function executeInlineNode(
       const data = node.data as { fields: { id: string; name: string; value: string }[] };
       output = Object.fromEntries(data.fields.map((f) => [f.id, f.value]));
     } else if (node.type === "response") {
+      // Keyed by edgeId (unique per connection), not targetHandle - every
+      // edge into Response shares the same "result" targetHandle, so
+      // keying by targetHandle would silently collapse multiple
+      // connections down to just the last one. Each entry carries both
+      // the derived display label and the resolved value, so the client
+      // can render it without re-deriving anything.
       const collected: Record<string, unknown> = {};
       for (const d of deps) {
-        const key = d.targetHandle ?? d.sourceNodeId;
+        const sourceNode = nodeMap.get(d.sourceNodeId);
+        const label = labelForResponseSource(sourceNode, d.sourceHandle);
         const value = d.sourceHandle ? d.output[d.sourceHandle] : d.output;
-        collected[key] = value;
+        collected[d.edgeId] = { label, value };
       }
       output = collected;
     }

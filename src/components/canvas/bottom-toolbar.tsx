@@ -1,28 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { File, Plus } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useReactFlow } from "reactflow";
 import { NodePicker } from "./node-picker";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { StickyNoteData } from "@/types/workflow";
-
-function StickyNoteIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className}>
-      <rect
-        x="4"
-        y="4"
-        width="16"
-        height="16"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-    </svg>
-  );
-}
 
 export function BottomToolbar({ historyOpen }: { historyOpen?: boolean }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -54,28 +38,29 @@ export function BottomToolbar({ historyOpen }: { historyOpen?: boolean }) {
       className="pointer-events-none absolute bottom-4 left-1/2 z-20 flex items-center gap-2 transition-transform duration-300 ease-in-out"
       style={{ transform: historyOpen ? "translateX(calc(-50% - 180px))" : "translateX(-50%)" }}
     >
-      {/* Sticky note button - its own standalone rounded card */}
-      <div className="pointer-events-auto group relative">
-        <button
-          suppressHydrationWarning
-          onClick={addStickyNote}
-          title="Add Sticky Note"
-          className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-md transition-colors hover:bg-gray-50 hover:text-gray-800"
-        >
-          <StickyNoteIcon className="h-4 w-4" />
-        </button>
-        <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-          Add Sticky Note
-        </span>
-      </div>
-
-      {/* Add-node button */}
+      {/* Sticky note + Add-node share one pill, matching the reference screenshot */}
       <div className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-gray-200 bg-white/95 px-1 py-1 shadow-md backdrop-blur-sm md:gap-1 md:px-1.5 md:py-1.5">
+        <span className="group relative">
+          <button
+            suppressHydrationWarning
+            onClick={addStickyNote}
+            title="Add Sticky Note"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          >
+            <File className="h-4 w-4" />
+          </button>
+          <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+            Add Sticky Note
+          </span>
+        </span>
+
+        <div className="mx-0.5 h-5 w-px bg-gray-200" />
+
         <button
           suppressHydrationWarning
           onClick={() => setPickerOpen(true)}
           title="Add node"
-          className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
         >
           <Plus className="h-4 w-4" />
         </button>

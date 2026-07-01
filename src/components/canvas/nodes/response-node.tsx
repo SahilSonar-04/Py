@@ -3,9 +3,32 @@
 import { Position, type NodeProps } from "reactflow";
 import { FileOutput, Info, Pencil, Trash2 } from "lucide-react";
 import { TypedHandle } from "./typed-handle";
+import { useCanvasStore } from "@/store/canvas-store";
+import { labelForResponseSource } from "@/lib/response-label";
 import type { ResponseData } from "@/types/workflow";
 
-export function ResponseNode({ data, selected }: NodeProps<ResponseData>) {
+export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
+  const edges = useCanvasStore((s) => s.edges);
+  const nodes = useCanvasStore((s) => s.nodes);
+  const setEdges = useCanvasStore((s) => s.setEdges);
+  const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const pushHistory = useCanvasStore((s) => s.pushHistory);
+
+  const incomingEdges = edges.filter((e) => e.target === id && e.targetHandle === "result");
+
+  const rows = incomingEdges.map((edge) => {
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    const label = labelForResponseSource(sourceNode, edge.sourceHandle ?? null);
+    const cached = data.slots.find((s) => s.id === edge.id);
+    return { edgeId: edge.id, label, value: cached?.value };
+  });
+
+  function handleDisconnect(edgeId: string) {
+    pushHistory();
+    setEdges(edges.filter((e) => e.id !== edgeId));
+    updateNodeData(id, { slots: data.slots.filter((s) => s.id !== edgeId) });
+  }
+
   return (
     <div
       className={`node-card ${selected ? "node-locked-ring" : ""}`}
@@ -34,33 +57,39 @@ export function ResponseNode({ data, selected }: NodeProps<ResponseData>) {
 
         <div className="border-t border-gray-100" />
 
-        <div className="space-y-3">
-          {data.slots.length === 0 && (
-            <p className="text-xs text-gray-400">
-              Wire node outputs into this node to define your final result.
-            </p>
-          )}
-          {data.slots.map((slot) => (
-            <div key={slot.id} className="space-y-2 rounded-lg bg-[#F5F5F5] p-3">
-              <div className="flex items-center gap-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm text-gray-900" title={slot.label}>
-                  {slot.label}
-                </span>
-                <button className="nodrag rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600" title="Rename">
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button className="nodrag rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-500" title="Disconnect">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+        {rows.length === 0 ? (
+          <p className="py-8 text-center text-xs text-gray-400">No output added yet</p>
+        ) : (
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <div key={row.edgeId} className="space-y-2 rounded-lg bg-[#F5F5F5] p-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900" title={row.label}>
+                    {row.label}
+                  </span>
+                  <button
+                    className="nodrag rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                    title="Rename"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => handleDisconnect(row.edgeId)}
+                    className="nodrag rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-500"
+                    title="Remove connection"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex h-10 items-center justify-center rounded border border-gray-200 bg-white">
+                  <span className="truncate px-2 text-xs text-gray-400">
+                    {row.value ? String(row.value).slice(0, 60) : "No output yet"}
+                  </span>
+                </div>
               </div>
-              <div className="flex h-10 items-center justify-center rounded border border-gray-200 bg-white">
-                <span className="truncate px-2 text-xs text-gray-400">
-                  {slot.value ? String(slot.value).slice(0, 60) : "No output yet"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
