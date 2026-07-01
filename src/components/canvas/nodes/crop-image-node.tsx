@@ -92,12 +92,13 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
   }
 
   const isRunning = data.status === "running";
+  const isSkipped = data.status === "skipped";
 
   return (
     <div
       className={`node-card max-w-[420px] ${isRunning ? "node-running" : ""} ${
-        selected ? "node-locked-ring" : ""
-      }`}
+        isSkipped ? "node-skipped" : ""
+      } ${selected ? "node-locked-ring" : ""}`}
       style={{ overflow: "visible" }}
     >
       {/* Header */}
@@ -107,6 +108,11 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
           <span className="truncate text-sm font-semibold text-gray-900">
             {data.label || "Crop Image"}
           </span>
+          {isSkipped && (
+            <span className="ml-1 shrink-0 rounded-full border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+              Skipped
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <InfoTooltip text="Crop an image to specified dimensions" side="bottom" />
@@ -259,7 +265,11 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
                 <img src={data.outputImageUrl} alt="cropped output" className="h-full w-full rounded object-cover" />
               ) : (
                 <div className="py-8 text-center text-xs text-gray-400">
-                  {isRunning ? "Processing (30s+)..." : "No output yet"}
+                  {isRunning
+                    ? "Processing (30s+)..."
+                    : isSkipped
+                    ? "Skipped — outside this run's scope"
+                    : "No output yet"}
                 </div>
               )}
             </div>

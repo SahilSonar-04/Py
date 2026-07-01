@@ -99,7 +99,15 @@ body {
   animation: node-pulse-glow 1.6s ease-in-out infinite;
   border-color: var(--workflow-accent-500);
 }
-
+/* Static (non-pulsing) treatment for nodes that were skip-passed-through
+   because they were outside the selected run's scope. Dashed border keeps
+   it visually distinct from both "idle" (solid gray) and "running" (pulsing
+   indigo glow), so a 0.0s duration never reads as "ran fine." */
+.node-skipped {
+  border-style: dashed;
+  border-color: #d1d5db;
+  opacity: 0.7;
+}
 /* Animated dashed edge for active connections */
 .edge-animated path.react-flow__edge-path {
   stroke-dasharray: 6 4;

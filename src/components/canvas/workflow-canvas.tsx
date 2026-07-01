@@ -57,6 +57,8 @@ function applyRunExecutionsToStore(nodeExecutions: NodeExecutionView[]) {
         ? "success"
         : exec.status === "FAILED"
         ? "failed"
+        : exec.status === "SKIPPED"
+        ? "skipped"
         : "idle";
     setNodeStatus(exec.nodeId, status);
 

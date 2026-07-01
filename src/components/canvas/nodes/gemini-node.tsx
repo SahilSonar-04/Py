@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { Position, type NodeProps } from "reactflow";
-import { Play, Loader2, ChevronDown, Sparkles, Upload, X, Plus } from "lucide-react";
+import { Play, Loader2, ChevronDown, Sparkles, Upload, X } from "lucide-react";
 import { TypedHandle } from "./typed-handle";
 import { useCanvasStore } from "@/store/canvas-store";
 import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
 
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
-  const addFieldToRequest = useCanvasStore((s) => s.addFieldToRequest);
 
   const isPromptConnected = useCanvasStore((s) =>
     s.isHandleConnected(id, "prompt")
@@ -66,12 +65,13 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   }
 
   const isRunning = data.status === "running";
+  const isSkipped = data.status === "skipped";
 
   return (
     <div
       className={`node-card max-w-[380px] ${isRunning ? "node-running" : ""} ${
-        selected ? "node-locked-ring" : ""
-      }`}
+        isSkipped ? "node-skipped" : ""
+      } ${selected ? "node-locked-ring" : ""}`}
       style={{ overflow: "visible" }}
     >
       <div className="flex items-start justify-between border-b border-gray-100 px-4 py-3">
@@ -91,6 +91,11 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
                 </option>
               ))}
             </select>
+            {isSkipped && (
+              <span className="ml-1 shrink-0 rounded-full border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                Skipped
+              </span>
+            )}
           </div>
         </div>
         <button
@@ -109,18 +114,8 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           <div className="absolute flex items-center" style={{ left: -22, top: 8 }}>
             <TypedHandle type="target" position={Position.Left} id="prompt" dataType="text" />
           </div>
-          <div className="mb-1.5 flex items-center justify-between pl-3">
-            <span className="text-xs text-gray-500">
-              Prompt<span className="text-red-400">*</span>
-            </span>
-            <button
-              onClick={() => addFieldToRequest(id, "prompt", "text", "prompt", data.prompt)}
-              disabled={isPromptConnected}
-              title={isPromptConnected ? "Already connected to Request-Inputs" : "Add to Request"}
-              className="nodrag flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
+          <div className="mb-1.5 pl-3 text-xs text-gray-500">
+            Prompt<span className="text-red-400">*</span>
           </div>
           <textarea
             value={data.prompt}
@@ -139,19 +134,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           <div className="absolute flex items-center" style={{ left: -22, top: 14 }}>
             <TypedHandle type="target" position={Position.Left} id="system_prompt" dataType="text" />
           </div>
-          <div className="mb-1.5 flex items-center justify-between pl-3">
-            <span className="text-xs text-gray-500">System Prompt</span>
-            <button
-              onClick={() =>
-                addFieldToRequest(id, "system_prompt", "text", "system_prompt", data.systemPrompt)
-              }
-              disabled={isSystemPromptConnected}
-              title={isSystemPromptConnected ? "Already connected to Request-Inputs" : "Add to Request"}
-              className="nodrag flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
-          </div>
+          <div className="mb-1.5 pl-3 text-xs text-gray-500">System Prompt</div>
           <textarea
             value={data.systemPrompt}
             onChange={(e) => set("systemPrompt", e.target.value)}
@@ -245,7 +228,11 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
                 <p className="whitespace-pre-wrap text-xs text-gray-800">{data.response}</p>
               ) : (
                 <div className="py-6 text-center text-xs text-gray-400">
-                  {isRunning ? "Generating..." : "No output yet"}
+                  {isRunning
+                    ? "Generating..."
+                    : isSkipped
+                    ? "Skipped — outside this run's scope"
+                    : "No output yet"}
                 </div>
               )}
             </div>

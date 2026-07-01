@@ -7,14 +7,7 @@ import {
   type EdgeChange,
 } from "reactflow";
 import { nanoid } from "nanoid";
-import type {
-  PyNode,
-  PyEdge,
-  ExecStatus,
-  RequestField,
-  RequestInputsData,
-  RequestFieldType,
-} from "@/types/workflow";
+import type { PyNode, PyEdge, ExecStatus } from "@/types/workflow";
 import {
   NODE_INPUT_TYPES,
   NODE_OUTPUT_TYPES,
@@ -63,28 +56,10 @@ interface CanvasState {
   setNodeStatus: (nodeId: string, status: ExecStatus) => void;
 
   setSelectedNodeIds: (ids: string[]) => void;
+  clearSelection: () => void;
   setHoveredEdgeId: (id: string | null) => void;
 
   isHandleConnected: (nodeId: string, handleId: string) => boolean;
-
-  /**
-   * "Add to Request" — creates (or reuses) a field on the Request-Inputs
-   * node and wires it straight into the given target handle. No-ops if the
-   * target handle is already connected to something.
-   */
-  addFieldToRequest: (
-    targetNodeId: string,
-    targetHandleId: string,
-    dataType: HandleDataType,
-    label: string,
-    defaultValue?: string
-  ) => void;
-
-  /**
-   * Deletes a field from Request-Inputs and cascades: every edge sourced
-   * from that field is removed in the same update so nothing dangles.
-   */
-  removeRequestField: (fieldId: string) => void;
 
   pushHistory: () => void;
   undo: () => void;
@@ -153,8 +128,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const targetType = getInputType(targetNode, connection.targetHandle);
     if (!isCompatible(sourceType, targetType)) return;
 
-    // Only "image" / "any" targets accept multiple incoming edges (vision fan-in).
-    // Every other handle type replaces any existing edge into that target handle.
     const allowsMulti = targetType === "image" || targetType === "any";
     const filteredEdges = allowsMulti
       ? edges
@@ -206,7 +179,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   duplicateNode: (nodeId, withEdges) => {
     const { nodes, edges } = get();
-    if (LOCKED_NODE_IDS.has(nodeId)) return; // don't duplicate the singleton nodes
+    if (LOCKED_NODE_IDS.has(nodeId)) return;
     const original = nodes.find((n) => n.id === nodeId);
     if (!original) return;
 
@@ -270,91 +243,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   setSelectedNodeIds: (ids) => set({ selectedNodeIds: ids }),
+
+  // Clears both our store's selection list AND React Flow's own per-node
+  // `selected` flag. Called right after a run's scope is captured, so the
+  // *next* click on Run can never silently inherit a stale SINGLE/PARTIAL
+  // selection from before (e.g. from clicking a node to read its error).
+  clearSelection: () =>
+    set((state) => ({
+      selectedNodeIds: [],
+      nodes: state.nodes.map((n) => (n.selected ? { ...n, selected: false } : n)),
+    })),
+
   setHoveredEdgeId: (id) => set({ hoveredEdgeId: id }),
 
   isHandleConnected: (nodeId, handleId) =>
     get().edges.some(
       (e) => e.target === nodeId && e.targetHandle === handleId
     ),
-
-  addFieldToRequest: (targetNodeId, targetHandleId, dataType, label, defaultValue = "") => {
-    const { nodes, edges } = get();
-
-    // Already wired to something -> nothing to do.
-    const alreadyConnected = edges.some(
-      (e) => e.target === targetNodeId && e.targetHandle === targetHandleId
-    );
-    if (alreadyConnected) return;
-
-    const requestNode = nodes.find((n) => n.id === "request-inputs");
-    if (!requestNode) return;
-    const requestData = requestNode.data as RequestInputsData;
-
-    const fieldType: RequestFieldType =
-      dataType === "image" ? "image_field" : dataType === "number" ? "number_field" : "text_field";
-
-    // "if in request that field is not there, it will be created" -
-    // dedupe by name so re-using a label doesn't collide with an existing one.
-    const existingNames = new Set(requestData.fields.map((f) => f.name));
-    let name = label;
-    let i = 1;
-    while (existingNames.has(name)) {
-      i += 1;
-      name = `${label}_${i}`;
-    }
-
-    const fieldId = `field_${nanoid(8)}`;
-    const newField: RequestField = { id: fieldId, name, type: fieldType, value: defaultValue };
-
-    const allowsMulti = dataType === "image" || dataType === "any";
-    const filteredEdges = allowsMulti
-      ? edges
-      : edges.filter((e) => !(e.target === targetNodeId && e.targetHandle === targetHandleId));
-
-    const newEdge: PyEdge = {
-      id: `edge_${nanoid(10)}`,
-      source: "request-inputs",
-      target: targetNodeId,
-      sourceHandle: fieldId,
-      targetHandle: targetHandleId,
-      animated: false,
-      style: { stroke: colorForType(dataType), strokeWidth: 2 },
-    };
-
-    get().pushHistory();
-    set({
-      nodes: nodes.map((n) =>
-        n.id === "request-inputs"
-          ? { ...n, data: { ...requestData, fields: [...requestData.fields, newField] } }
-          : n
-      ),
-      edges: [...filteredEdges, newEdge],
-      isDirty: true,
-    });
-  },
-
-  removeRequestField: (fieldId) => {
-    get().pushHistory();
-    set((state) => ({
-      nodes: state.nodes.map((n) =>
-        n.id === "request-inputs"
-          ? {
-              ...n,
-              data: {
-                ...n.data,
-                fields: (n.data as RequestInputsData).fields.filter((f) => f.id !== fieldId),
-              },
-            }
-          : n
-      ),
-      // Cascade: strip every edge that originated from this field so
-      // nothing is left dangling once the field itself is gone.
-      edges: state.edges.filter(
-        (e) => !(e.source === "request-inputs" && e.sourceHandle === fieldId)
-      ),
-      isDirty: true,
-    }));
-  },
 
   pushHistory: () => {
     const { nodes, edges, past } = get();
@@ -402,9 +307,7 @@ function getOutputType(
   if (node.type === "request") {
     const data = node.data as { fields: { id: string; type: string }[] };
     const field = data.fields.find((f) => f.id === handle);
-    if (field?.type === "image_field") return "image";
-    if (field?.type === "number_field") return "number";
-    return "text";
+    return field?.type === "image_field" ? "image" : "text";
   }
   return NODE_OUTPUT_TYPES[`${node.type}:${handle}`] ?? "any";
 }
@@ -462,12 +365,6 @@ function wouldCreateCycle(
   return false;
 }
 
-/**
- * Standalone validity check usable outside onConnect (e.g. live drag-feedback,
- * isValidConnection prop) — given two endpoints with explicit handle "roles"
- * (source/target), resolves which is the real output and which the real
- * input and checks type compatibility + same-node rejection.
- */
 export function isConnectionValid(
   nodes: PyNode[],
   aNodeId: string,
@@ -479,7 +376,7 @@ export function isConnectionValid(
 ): boolean {
   if (!aNodeId || !bNodeId) return false;
   if (aNodeId === bNodeId) return false;
-  if (aType === bType) return false; // can't link two sources or two targets
+  if (aType === bType) return false;
 
   const sourceNodeId = aType === "source" ? aNodeId : bNodeId;
   const sourceHandle = aType === "source" ? aHandle : bHandle;

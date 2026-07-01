@@ -12,18 +12,48 @@ export function TopRightControls({
   workflowId: string;
   onToggleHistory: () => void;
 }) {
-  const { nodes, edges, selectedNodeIds, isRunning, setRunning, undo, redo, past, future, setNodes, setEdges } =
-    useCanvasStore();
+  const {
+    nodes,
+    edges,
+    selectedNodeIds,
+    isRunning,
+    setRunning,
+    undo,
+    redo,
+    past,
+    future,
+    setNodes,
+    setEdges,
+    clearSelection,
+  } = useCanvasStore();
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function runWorkflow(scope: "FULL" | "PARTIAL" | "SINGLE") {
     if (busy) return;
+
+    // Explicit confirmation for scoped runs, so a stale/accidental selection
+    // can never silently produce a partial run again — this is the second
+    // layer of defense on top of clearSelection() below.
+    if (scope !== "FULL") {
+      const label = scope === "SINGLE" ? "1 node" : `${selectedNodeIds.length} nodes`;
+      const ok = window.confirm(
+        `This will run only ${label} (everything else will be skipped, not re-run). Continue?\n\nClick Cancel, then click empty canvas space first, to run the FULL workflow instead.`
+      );
+      if (!ok) return;
+    }
+
     setBusy(true);
     setRunning(true);
     try {
       const targetNodeIds =
         scope === "FULL" ? undefined : selectedNodeIds.length > 0 ? selectedNodeIds : undefined;
+
+      // Capture-then-clear: scope for *this* run is already computed above,
+      // so it's safe to clear canvas selection now. This is what prevents
+      // the next Run click from silently inheriting this same scope.
+      clearSelection();
+
       await fetch(`/api/workflows/${workflowId}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

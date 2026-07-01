@@ -78,7 +78,7 @@ export interface ResponseData {
   locked: true;
 }
 
-export type ExecStatus = "idle" | "pending" | "running" | "success" | "failed";
+export type ExecStatus = "idle" | "pending" | "running" | "success" | "failed" | "skipped";
 
 export type PyNodeData =
   | RequestInputsData
