@@ -11,6 +11,7 @@ export function ParamSlider({
   defaultValue,
   disabled,
   info,
+  connected,
   onChange,
   onAddToRequest,
 }: {
@@ -21,6 +22,8 @@ export function ParamSlider({
   defaultValue: number;
   disabled?: boolean;
   info?: string;
+  /** Hides the "Add to Request" button once this handle already has a connection. */
+  connected?: boolean;
   onChange: (v: number) => void;
   onAddToRequest?: () => void;
 }) {
@@ -69,18 +72,22 @@ export function ParamSlider({
         <RotateCcw className="h-3 w-3" />
       </button>
 
-      <span className="group/tip relative shrink-0">
-        <button
-          type="button"
-          onClick={onAddToRequest}
-          className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
-        >
-          <Plus className="h-3 w-3" />
-        </button>
-        <span className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden whitespace-nowrap rounded-lg bg-gray-900 px-2 py-1 text-[10px] font-medium text-white group-hover/tip:block">
-          Add to Request
+      {/* Once this handle is wired to anything (Request-Inputs or otherwise),
+          there's nothing left to "add" — the button disappears for good. */}
+      {!connected && (
+        <span className="group/tip relative shrink-0">
+          <button
+            type="button"
+            onClick={onAddToRequest}
+            className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+          <span className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden whitespace-nowrap rounded-lg bg-gray-900 px-2 py-1 text-[10px] font-medium text-white group-hover/tip:block">
+            Add to Request
+          </span>
         </span>
-      </span>
+      )}
     </div>
   );
 }

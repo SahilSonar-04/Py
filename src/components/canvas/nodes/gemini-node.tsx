@@ -34,6 +34,9 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const isSystemPromptConnected = useCanvasStore((s) =>
     s.isHandleConnected(id, "system_prompt")
   );
+  const isImageConnected = useCanvasStore((s) =>
+    s.isHandleConnected(id, "image")
+  );
 
   const [uploading, setUploading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -184,14 +187,16 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
               Prompt<span className="text-red-400">*</span>
               <InfoTooltip text="The main instruction sent to the model." side="right" />
             </span>
-            <button
-              type="button"
-              title="Add to Request"
-              onClick={() => addFieldAndConnect(id, "prompt", "text", "prompt")}
-              className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
+            {!isPromptConnected && (
+              <button
+                type="button"
+                title="Add to Request"
+                onClick={() => addFieldAndConnect(id, "prompt", "text", "prompt")}
+                className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            )}
           </div>
           <textarea
             value={data.prompt}
@@ -215,14 +220,16 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
               System Prompt
               <InfoTooltip text="Sets the model's persona / behavior for the whole conversation." side="right" />
             </span>
-            <button
-              type="button"
-              title="Add to Request"
-              onClick={() => addFieldAndConnect(id, "system_prompt", "text", "system_prompt")}
-              className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
+            {!isSystemPromptConnected && (
+              <button
+                type="button"
+                title="Add to Request"
+                onClick={() => addFieldAndConnect(id, "system_prompt", "text", "system_prompt")}
+                className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            )}
           </div>
           <textarea
             value={data.systemPrompt}
@@ -244,14 +251,16 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           <div className="pl-3">
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-xs text-gray-500">Image (Vision)</span>
-              <button
-                type="button"
-                title="Add to Request"
-                onClick={() => addFieldAndConnect(id, "image", "image", "image")}
-                className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
+              {!isImageConnected && (
+                <button
+                  type="button"
+                  title="Add to Request"
+                  onClick={() => addFieldAndConnect(id, "image", "image", "image")}
+                  className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              )}
             </div>
 
             {data.imageUrls.length > 0 && (
@@ -353,13 +362,6 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   );
 }
 
-/**
- * Visually matches an "Upload X" button (per design), but functions as a URL
- * entry field - there is no real video/audio upload backend yet (see
- * README's "Known limitations"; /api/upload only accepts image mime types).
- * Clicking reveals a URL input; once saved, the button relabels to
- * "Change {label}" and shows the current value beneath it.
- */
 function UploadStyleUrlField({
   id,
   label,
@@ -389,13 +391,6 @@ function UploadStyleUrlField({
       <div className="pl-3">
         <div className="mb-1.5 flex items-center justify-between">
           <span className="text-xs text-gray-500">{label}</span>
-          <button
-            type="button"
-            title="Add to Request"
-            className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
         </div>
 
         {!editing ? (

@@ -1,33 +1,20 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Play, Clock, Undo2, Redo2, Download, Upload, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Play, Clock, Loader2 } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
-import type { WorkflowGraph } from "@/types/workflow";
 
 export function TopRightControls({
   workflowId,
   onToggleHistory,
+  historyOpen,
 }: {
   workflowId: string;
   onToggleHistory: () => void;
+  historyOpen?: boolean;
 }) {
-  const {
-    nodes,
-    edges,
-    selectedNodeIds,
-    isRunning,
-    setRunning,
-    undo,
-    redo,
-    past,
-    future,
-    setNodes,
-    setEdges,
-    clearSelection,
-  } = useCanvasStore();
+  const { selectedNodeIds, isRunning, setRunning, clearSelection } = useCanvasStore();
   const [busy, setBusy] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function runWorkflow(scope: "FULL" | "PARTIAL" | "SINGLE") {
     if (busy) return;
@@ -70,80 +57,14 @@ export function TopRightControls({
     else runWorkflow("FULL");
   }
 
-  function exportJson() {
-    const graph: WorkflowGraph = { nodes, edges };
-    const blob = new Blob([JSON.stringify(graph, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `workflow-${workflowId}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function importJson(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result as string) as WorkflowGraph;
-        if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-          setNodes(parsed.nodes);
-          setEdges(parsed.edges);
-        }
-      } catch {
-        // silently ignore malformed JSON for now
-      }
-    };
-    reader.readAsText(file);
-  }
-
   return (
-    <div className="pointer-events-none absolute right-2 top-2 z-20 sm:right-4">
+    <div
+      className="pointer-events-none absolute right-2 top-2 z-20 transition-transform duration-300 ease-in-out sm:right-4"
+      style={{ transform: historyOpen ? "translateX(-380px)" : "translateX(0)" }}
+    >
       <div className="pointer-events-auto flex items-center gap-2">
         <Pill label="Est" value="0.00 M" />
         <Pill label="Bal" value="0.00 M" />
-
-        <button
-          onClick={undo}
-          disabled={past.length === 0}
-          className="flex h-8 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40"
-          title="Undo"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={redo}
-          disabled={future.length === 0}
-          className="flex h-8 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40"
-          title="Redo"
-        >
-          <Redo2 className="h-3.5 w-3.5" />
-        </button>
-
-        <button
-          onClick={exportJson}
-          className="flex h-8 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
-          title="Export JSON"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="flex h-8 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
-          title="Import JSON"
-        >
-          <Upload className="h-3.5 w-3.5" />
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          hidden
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) importJson(file);
-          }}
-        />
 
         <button
           onClick={handleRunClick}
@@ -166,7 +87,11 @@ export function TopRightControls({
 
         <button
           onClick={onToggleHistory}
-          className="flex h-8 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-100"
+          className={`flex h-8 w-9 items-center justify-center rounded-lg border shadow-sm transition-colors ${
+            historyOpen
+              ? "border-workflow-accent-400 bg-workflow-accent-50 text-workflow-accent-600"
+              : "border-gray-200 bg-white text-gray-800 hover:bg-gray-100"
+          }`}
           title="Execution History"
         >
           <Clock className="h-3.5 w-3.5" />

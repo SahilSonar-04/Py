@@ -167,14 +167,18 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
                 <Upload className="h-3.5 w-3.5" />
                 <span>{data.inputImageUrl ? "Change Image" : "Upload Image"}</span>
               </button>
-              <button
-                type="button"
-                title="Add to Request"
-                onClick={() => addFieldAndConnect(id, "input_image", "image", "input_image")}
-                className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50"
-              >
-                +
-              </button>
+
+              {/* Disappears for good once this handle has any connection. */}
+              {!isInputImageConnected && (
+                <button
+                  type="button"
+                  title="Add to Request"
+                  onClick={() => addFieldAndConnect(id, "input_image", "image", "input_image")}
+                  className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50"
+                >
+                  +
+                </button>
+              )}
 
               {flyoutOpen && (
                 <ImageUploadFlyout
@@ -220,6 +224,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             value={data.x}
             defaultValue={0}
             disabled={isXConnected}
+            connected={isXConnected}
             onChange={(v) => set("x", v)}
             onAddToRequest={() => addFieldAndConnect(id, "x", "number", "x_position")}
           />
@@ -230,6 +235,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             value={data.y}
             defaultValue={0}
             disabled={isYConnected}
+            connected={isYConnected}
             onChange={(v) => set("y", v)}
             onAddToRequest={() => addFieldAndConnect(id, "y", "number", "y_position")}
           />
@@ -241,6 +247,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             min={1}
             defaultValue={100}
             disabled={isWidthConnected}
+            connected={isWidthConnected}
             onChange={(v) => set("width", v)}
             onAddToRequest={() => addFieldAndConnect(id, "width", "number", "width")}
           />
@@ -252,6 +259,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             min={1}
             defaultValue={100}
             disabled={isHeightConnected}
+            connected={isHeightConnected}
             onChange={(v) => set("height", v)}
             onAddToRequest={() => addFieldAndConnect(id, "height", "number", "height")}
           />

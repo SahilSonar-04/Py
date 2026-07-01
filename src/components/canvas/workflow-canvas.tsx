@@ -6,7 +6,6 @@ import ReactFlow, {
   BackgroundVariant,
   Controls,
   ConnectionLineType,
-  MiniMap,
   ReactFlowProvider,
   type Connection,
   type OnSelectionChangeParams,
@@ -19,6 +18,7 @@ import { BottomToolbar } from "./bottom-toolbar";
 import { TopRightControls } from "./top-right-controls";
 import { WorkflowHeader } from "./workflow-header";
 import { HistoryPanel } from "./history-panel";
+import { MinimapToggle } from "./minimap-toggle";
 import type {
   NodeExecutionView,
   PyEdge,
@@ -405,12 +405,16 @@ function CanvasInner({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls position="bottom-left" showInteractive={false} />
-        <MiniMap position="bottom-right" pannable zoomable className="!bg-white" />
       </ReactFlow>
 
       <WorkflowHeader workflowId={workflowId} />
-      <TopRightControls workflowId={workflowId} onToggleHistory={() => setHistoryOpen((v) => !v)} />
-      <BottomToolbar />
+      <TopRightControls
+        workflowId={workflowId}
+        onToggleHistory={() => setHistoryOpen((v) => !v)}
+        historyOpen={historyOpen}
+      />
+      <BottomToolbar historyOpen={historyOpen} />
+      <MinimapToggle historyOpen={historyOpen} />
       <HistoryPanel workflowId={workflowId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   );
