@@ -136,7 +136,13 @@ export function HistoryPanel({
                           </p>
                         ) : null}
                         {exec.error && (
-                          <p className="mt-0.5 truncate text-[10px] text-red-500">{exec.error}</p>
+                          // Was `truncate` (single-line, cuts mid-sentence) -
+                          // now wraps fully so you can read the real error,
+                          // which is exactly what you need to diagnose the
+                          // Gemini model/API issue.
+                          <p className="mt-0.5 whitespace-pre-wrap break-words text-[10px] text-red-500">
+                            {exec.error}
+                          </p>
                         )}
                       </div>
                     ))}

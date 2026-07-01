@@ -41,33 +41,42 @@ export async function POST(
   try {
     // Dynamic import keeps trigger.dev SDK out of the edge bundle until needed
     const { orchestratorTask } = await import("@/trigger/orchestrator");
+    const { runs } = await import("@trigger.dev/sdk/v3");
 
-    // Fire-and-forget: orchestrator drives node-by-node DB writes that the
-    // history panel polls, so we don't block the HTTP response on full completion.
-    orchestratorTask
-      .trigger({
-        runId: run.id,
-        nodes: graph.nodes,
-        edges: graph.edges,
-        targetNodeIds: scope === "FULL" ? undefined : targetNodeIds,
-      })
-      .then(async () => {
-        await finalizeRun(run.id, workflowId);
+    // IMPORTANT: triggerAndWait() can only be called from inside another
+    // task's run() function - calling it here (a plain API route) throws
+    // "triggerAndWait can only be used from inside a task.run()" before the
+    // orchestrator ever starts, which is why no NodeExecution rows existed.
+    //
+    // The correct way to wait on a task from outside a task context is to
+    // trigger() it (returns immediately with a handle) and then poll its
+    // status with runs.poll() until it reaches a terminal state.
+    const handle = await orchestratorTask.trigger({
+      runId: run.id,
+      nodes: graph.nodes,
+      edges: graph.edges,
+      targetNodeIds: scope === "FULL" ? undefined : targetNodeIds,
+    });
+
+    runs
+      .poll(handle.id, { pollIntervalMs: 1000 })
+      .then(async (result) => {
+        if (result.status === "COMPLETED") {
+          await finalizeRun(run.id, workflowId);
+        } else {
+          const reason =
+            "error" in result && result.error
+              ? String((result.error as { message?: string }).message ?? result.error)
+              : `Orchestrator run ended with status: ${result.status}`;
+          await markRunFailed(run.id, workflowId, reason);
+        }
       })
       .catch(async (err: unknown) => {
-        await prisma.workflowRun.update({
-          where: { id: run.id },
-          data: { status: "FAILED", finishedAt: new Date() },
-        });
-        await prisma.workflow.update({ where: { id: workflowId }, data: { status: "idle" } });
         console.error("Orchestrator failed:", err);
+        await markRunFailed(run.id, workflowId, err instanceof Error ? err.message : String(err));
       });
   } catch (err) {
-    await prisma.workflowRun.update({
-      where: { id: run.id },
-      data: { status: "FAILED", finishedAt: new Date() },
-    });
-    await prisma.workflow.update({ where: { id: workflowId }, data: { status: "idle" } });
+    await markRunFailed(run.id, workflowId, err instanceof Error ? err.message : String(err));
     return NextResponse.json(
       { error: "Failed to start run", detail: err instanceof Error ? err.message : String(err) },
       { status: 500 }
@@ -75,6 +84,39 @@ export async function POST(
   }
 
   return NextResponse.json({ runId: run.id }, { status: 202 });
+}
+
+/**
+ * Marks the run as FAILED and, if no NodeExecution rows exist yet (meaning
+ * the orchestrator never actually started executing nodes), writes a
+ * synthetic "orchestrator" entry carrying the failure reason so it's visible
+ * in the history panel instead of silently showing "No node executions
+ * recorded."
+ */
+async function markRunFailed(runId: string, workflowId: string, errorMessage: string) {
+  const existingCount = await prisma.nodeExecution.count({ where: { runId } });
+
+  if (existingCount === 0) {
+    await prisma.nodeExecution.create({
+      data: {
+        runId,
+        nodeId: "orchestrator",
+        nodeType: "orchestrator",
+        nodeLabel: "Workflow startup",
+        status: "FAILED",
+        startedAt: new Date(),
+        finishedAt: new Date(),
+        durationMs: 0,
+        error: errorMessage,
+      },
+    });
+  }
+
+  await prisma.workflowRun.update({
+    where: { id: runId },
+    data: { status: "FAILED", finishedAt: new Date() },
+  });
+  await prisma.workflow.update({ where: { id: workflowId }, data: { status: "idle" } });
 }
 
 async function finalizeRun(runId: string, workflowId: string) {

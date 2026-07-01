@@ -9,12 +9,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const parsed = cropImageTaskInputSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    const message =
+      parsed.error.issues.map((i) => i.message).join("; ") || "Invalid input";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   try {
     const { cropImageTask } = await import("@/trigger/crop-image");
-    const result = await cropImageTask.triggerAndWait(parsed.data).unwrap();
+    const { triggerAndWaitOutsideTask } = await import("@/lib/trigger-helpers");
+    const result = await triggerAndWaitOutsideTask(cropImageTask, parsed.data);
     return NextResponse.json({ outputImageUrl: result.outputImageUrl });
   } catch (err) {
     return NextResponse.json(

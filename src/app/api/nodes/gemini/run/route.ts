@@ -9,12 +9,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const parsed = geminiTaskInputSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    const message =
+      parsed.error.issues.map((i) => i.message).join("; ") || "Invalid input";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   try {
     const { geminiTask } = await import("@/trigger/gemini");
-    const result = await geminiTask.triggerAndWait(parsed.data).unwrap();
+    const { triggerAndWaitOutsideTask } = await import("@/lib/trigger-helpers");
+    const result = await triggerAndWaitOutsideTask(geminiTask, parsed.data);
     return NextResponse.json({ response: result.response });
   } catch (err) {
     return NextResponse.json(

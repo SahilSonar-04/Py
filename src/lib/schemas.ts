@@ -50,8 +50,19 @@ export const runWorkflowSchema = z.object({
   targetNodeIds: z.array(z.string()).optional(),
 });
 
+// Accept either a full URL (https://...) or a local relative upload path
+// (/uploads/abc123.png). The previous z.string().url() rejected every local
+// upload, since z.url() requires an absolute URL with a protocol/host - that
+// silent validation failure was what produced the {formErrors, fieldErrors}
+// object that crashed the node UI when rendered as `data.error`.
 export const cropImageTaskInputSchema = z.object({
-  inputImageUrl: z.string().url(),
+  inputImageUrl: z
+    .string()
+    .min(1, "Input image is required")
+    .refine(
+      (val) => val.startsWith("/uploads/") || /^https?:\/\//.test(val),
+      "Input image must be an uploaded file or a valid http(s) URL"
+    ),
   x: z.number().min(0).max(100),
   y: z.number().min(0).max(100),
   width: z.number().min(1).max(100),

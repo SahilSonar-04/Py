@@ -19,7 +19,7 @@ import { BottomToolbar } from "./bottom-toolbar";
 import { TopRightControls } from "./top-right-controls";
 import { WorkflowHeader } from "./workflow-header";
 import { HistoryPanel } from "./history-panel";
-import type { PyEdge, PyNode } from "@/types/workflow";
+import type { PyEdge, PyNode, ResponseData, ResponseSlot } from "@/types/workflow";
 
 const LOCKED_NODE_IDS = new Set(["request-inputs", "response"]);
 
@@ -80,6 +80,7 @@ function CanvasInner({
     isRunning,
     setRunning,
     setNodeStatus,
+    updateNodeData,
   } = useCanvasStore();
 
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -251,6 +252,49 @@ function CanvasInner({
             ? "failed"
             : "idle";
         setNodeStatus(exec.nodeId, status);
+
+        if (exec.status === "SUCCESS" && exec.output && typeof exec.output === "object") {
+          const output = exec.output as Record<string, unknown>;
+
+          if (exec.nodeType === "crop_image" && typeof output.output_image === "string") {
+            updateNodeData(exec.nodeId, { outputImageUrl: output.output_image, error: undefined });
+          } else if (exec.nodeType === "gemini" && typeof output.response === "string") {
+            updateNodeData(exec.nodeId, { response: output.response, error: undefined });
+          } else if (exec.nodeType === "response") {
+            // The Response node renders from `data.slots[]`, not from a flat
+            // field - the orchestrator's output for this node type is a map
+            // keyed by target handle id (e.g. { result: "..." } for the
+            // default canvas, or { "slot-gemini3": "...", "slot-crop2": "..." }
+            // for the sample workflow). Without this branch, Response would
+            // stay "No output yet" forever even once polling + status sync
+            // worked correctly, because nothing ever wrote into `slots`.
+            const currentNode = useCanvasStore
+              .getState()
+              .nodes.find((n) => n.id === exec.nodeId);
+            const currentSlots: ResponseSlot[] =
+              currentNode && currentNode.type === "response"
+                ? (currentNode.data as ResponseData).slots ?? []
+                : [];
+
+            const nextSlots: ResponseSlot[] = [...currentSlots];
+            for (const [key, value] of Object.entries(output)) {
+              const stringValue =
+                typeof value === "string" ? value : value != null ? JSON.stringify(value) : "";
+              const existingIndex = nextSlots.findIndex((s) => s.id === key);
+              if (existingIndex >= 0) {
+                nextSlots[existingIndex] = { ...nextSlots[existingIndex], value: stringValue };
+              } else {
+                nextSlots.push({ id: key, label: key, value: stringValue });
+              }
+            }
+
+            updateNodeData(exec.nodeId, { slots: nextSlots });
+          }
+        }
+
+        if (exec.status === "FAILED" && exec.error) {
+          updateNodeData(exec.nodeId, { error: exec.error });
+        }
       }
 
       if (latestRun.status !== "RUNNING" && latestRun.status !== "PENDING") {
@@ -264,7 +308,7 @@ function CanvasInner({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isRunning, workflowId, setNodeStatus, setRunning]);
+  }, [isRunning, workflowId, setNodeStatus, updateNodeData, setRunning]);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#fafafa]">
