@@ -22,6 +22,8 @@ import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
 
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const addFieldAndConnect = useCanvasStore((s) => s.addFieldAndConnect);
+
   const isLocked = useCanvasStore(
     (s) => s.nodes.find((n) => n.id === id)?.draggable === false
   );
@@ -185,6 +187,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
             <button
               type="button"
               title="Add to Request"
+              onClick={() => addFieldAndConnect(id, "prompt", "text", "prompt")}
               className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
             >
               <Plus className="h-3 w-3" />
@@ -215,6 +218,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
             <button
               type="button"
               title="Add to Request"
+              onClick={() => addFieldAndConnect(id, "system_prompt", "text", "system_prompt")}
               className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
             >
               <Plus className="h-3 w-3" />
@@ -243,6 +247,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
               <button
                 type="button"
                 title="Add to Request"
+                onClick={() => addFieldAndConnect(id, "image", "image", "image")}
                 className="nodrag flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
               >
                 <Plus className="h-3 w-3" />

@@ -22,6 +22,7 @@ import type { CropImageData } from "@/types/workflow";
 
 export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const addFieldAndConnect = useCanvasStore((s) => s.addFieldAndConnect);
   const isLocked = useCanvasStore(
     (s) => s.nodes.find((n) => n.id === id)?.draggable === false
   );
@@ -73,10 +74,6 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
         set("status", "success");
       } else {
         set("status", "failed");
-        // Defensive coercion: even though the API route now always returns a
-        // string, guard here too so a future regression can't crash the UI
-        // by setting an object/array into `data.error`, which is rendered
-        // directly as a React child below.
         const message =
           typeof json.error === "string"
             ? json.error
@@ -101,7 +98,6 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
       } ${selected ? "node-locked-ring" : ""}`}
       style={{ overflow: "visible" }}
     >
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <div className="flex min-w-0 items-center gap-1.5">
           <Crop className="h-3.5 w-3.5 shrink-0 text-gray-400" />
@@ -171,7 +167,12 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
                 <Upload className="h-3.5 w-3.5" />
                 <span>{data.inputImageUrl ? "Change Image" : "Upload Image"}</span>
               </button>
-              <button className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50">
+              <button
+                type="button"
+                title="Add to Request"
+                onClick={() => addFieldAndConnect(id, "input_image", "image", "input_image")}
+                className="nodrag flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50"
+              >
                 +
               </button>
 
@@ -220,6 +221,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={0}
             disabled={isXConnected}
             onChange={(v) => set("x", v)}
+            onAddToRequest={() => addFieldAndConnect(id, "x", "number", "x_position")}
           />
           <SliderHandle nodeId={id} id="y" />
           <ParamSlider
@@ -229,6 +231,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={0}
             disabled={isYConnected}
             onChange={(v) => set("y", v)}
+            onAddToRequest={() => addFieldAndConnect(id, "y", "number", "y_position")}
           />
           <SliderHandle nodeId={id} id="width" />
           <ParamSlider
@@ -239,6 +242,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={100}
             disabled={isWidthConnected}
             onChange={(v) => set("width", v)}
+            onAddToRequest={() => addFieldAndConnect(id, "width", "number", "width")}
           />
           <SliderHandle nodeId={id} id="height" />
           <ParamSlider
@@ -249,6 +253,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             defaultValue={100}
             disabled={isHeightConnected}
             onChange={(v) => set("height", v)}
+            onAddToRequest={() => addFieldAndConnect(id, "height", "number", "height")}
           />
         </div>
 

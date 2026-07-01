@@ -1,3 +1,4 @@
+// src/store/canvas-store.ts
 import { create } from "zustand";
 import {
   applyNodeChanges,
@@ -7,7 +8,14 @@ import {
   type EdgeChange,
 } from "reactflow";
 import { nanoid } from "nanoid";
-import type { PyNode, PyEdge, ExecStatus } from "@/types/workflow";
+import type {
+  PyNode,
+  PyEdge,
+  ExecStatus,
+  RequestInputsData,
+  RequestField,
+  RequestFieldType,
+} from "@/types/workflow";
 import {
   NODE_INPUT_TYPES,
   NODE_OUTPUT_TYPES,
@@ -53,7 +61,22 @@ interface CanvasState {
     partialData: Record<string, unknown>
   ) => void;
   removeNode: (nodeId: string) => void;
+  removeRequestField: (fieldId: string) => void;
   setNodeStatus: (nodeId: string, status: ExecStatus) => void;
+
+  /**
+   * "Add to Request" behavior: finds an existing, unconnected Request-Inputs
+   * field of the right type (reusing it rather than spawning duplicates on
+   * repeat clicks), or creates one if none exists, then wires an edge from
+   * it into the given node/handle. Only supports "text" | "image" | "number"
+   * since those are the field types Request-Inputs actually has.
+   */
+  addFieldAndConnect: (
+    targetNodeId: string,
+    targetHandle: string,
+    dataType: Extract<HandleDataType, "text" | "image" | "number">,
+    fieldLabel: string
+  ) => void;
 
   setSelectedNodeIds: (ids: string[]) => void;
   clearSelection: () => void;
@@ -70,6 +93,7 @@ interface CanvasState {
 }
 
 const LOCKED_NODE_IDS = new Set(["request-inputs", "response"]);
+const REQUEST_NODE_ID = "request-inputs";
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   workflowId: null,
@@ -232,6 +256,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }));
   },
 
+  removeRequestField: (fieldId) => {
+    get().pushHistory();
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === REQUEST_NODE_ID
+          ? {
+              ...n,
+              data: {
+                ...(n.data as RequestInputsData),
+                fields: (n.data as RequestInputsData).fields.filter(
+                  (f) => f.id !== fieldId
+                ),
+              },
+            }
+          : n
+      ),
+      edges: state.edges.filter((e) => e.sourceHandle !== fieldId),
+      isDirty: true,
+    }));
+  },
+
   setNodeStatus: (nodeId, status) => {
     set((state) => ({
       nodes: state.nodes.map((n) =>
@@ -242,12 +287,79 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }));
   },
 
+  addFieldAndConnect: (targetNodeId, targetHandle, dataType, fieldLabel) => {
+    const { nodes, edges } = get();
+    const requestNode = nodes.find((n) => n.id === REQUEST_NODE_ID);
+    if (!requestNode || requestNode.type !== "request") return;
+
+    const fieldType: RequestFieldType =
+      dataType === "image"
+        ? "image_field"
+        : dataType === "number"
+        ? "number_field"
+        : "text_field";
+
+    const requestData = requestNode.data as RequestInputsData;
+
+    // Fields already wired to *something* are considered "spoken for" -
+    // repeat clicks reuse the first matching field that isn't, rather than
+    // spawning a new field every time.
+    const connectedFieldIds = new Set(
+      edges.filter((e) => e.source === REQUEST_NODE_ID).map((e) => e.sourceHandle)
+    );
+    let field: RequestField | undefined = requestData.fields.find(
+      (f) => f.type === fieldType && !connectedFieldIds.has(f.id)
+    );
+
+    get().pushHistory();
+
+    let nextNodes = nodes;
+    if (!field) {
+      const count = requestData.fields.filter((f) => f.type === fieldType).length;
+      const baseName = fieldLabel || fieldType;
+      const name = count === 0 ? baseName : `${baseName}_${count + 1}`;
+      field = {
+        id: `field_${nanoid(8)}`,
+        name,
+        type: fieldType,
+        value: fieldType === "number_field" ? "0" : "",
+      };
+      const createdField = field;
+      nextNodes = nodes.map((n) =>
+        n.id === REQUEST_NODE_ID
+          ? {
+              ...n,
+              data: {
+                ...(n.data as RequestInputsData),
+                fields: [...(n.data as RequestInputsData).fields, createdField],
+              },
+            }
+          : n
+      );
+    }
+
+    const allowsMulti = dataType === "image";
+    const filteredEdges = allowsMulti
+      ? edges
+      : edges.filter(
+          (e) => !(e.target === targetNodeId && e.targetHandle === targetHandle)
+        );
+
+    const newEdge: PyEdge = {
+      id: `edge_${nanoid(10)}`,
+      source: REQUEST_NODE_ID,
+      target: targetNodeId,
+      sourceHandle: field.id,
+      targetHandle,
+      animated: false,
+      style: { stroke: colorForType(dataType), strokeWidth: 2 },
+    };
+
+    set({ nodes: nextNodes, edges: [...filteredEdges, newEdge], isDirty: true });
+  },
+
   setSelectedNodeIds: (ids) => set({ selectedNodeIds: ids }),
 
-  // Clears both our store's selection list AND React Flow's own per-node
-  // `selected` flag. Called right after a run's scope is captured, so the
-  // *next* click on Run can never silently inherit a stale SINGLE/PARTIAL
-  // selection from before (e.g. from clicking a node to read its error).
   clearSelection: () =>
     set((state) => ({
       selectedNodeIds: [],
@@ -298,7 +410,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setRunning: (running) => set({ isRunning: running }),
   markSaved: () => set({ isDirty: false }),
 }));
-
 
 function getOutputType(
   node: PyNode,
