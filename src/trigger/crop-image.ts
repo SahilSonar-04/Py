@@ -1,8 +1,6 @@
 import { task, wait } from "@trigger.dev/sdk/v3";
 import sharp from "sharp";
-import { writeFile } from "fs/promises";
-import path from "path";
-import { nanoid } from "nanoid";
+import { uploadBufferToTransloadit } from "@/lib/transloadit";
 
 export interface CropImagePayload {
   inputImageUrl: string;
@@ -24,6 +22,14 @@ export interface CropImageResult {
  * percentage-based crop box) rather than shelling out to ffmpeg directly, since the
  * cropping operation itself is instant - the 30s wait is the explicit hard
  * requirement being satisfied here, not a simulation of real processing time.
+ *
+ * IMPORTANT: this task runs on Trigger.dev's cloud infrastructure, which does
+ * NOT share a filesystem with Vercel or your local dev machine. It can only
+ * read input images via http(s) fetch, and must store its output via a real
+ * remote store (Transloadit here) rather than writing to local disk - a
+ * previous version of this task wrote to `public/uploads` locally, which
+ * worked in local dev (same filesystem) but throws ENOENT / produces
+ * unreachable files once deployed.
  */
 export const cropImageTask = task({
   id: "crop-image",
@@ -31,7 +37,6 @@ export const cropImageTask = task({
   run: async (payload: CropImagePayload): Promise<CropImageResult> => {
     const { inputImageUrl, x, y, width, height } = payload;
 
-    // Resolve the input image (supports local /uploads/* paths and remote URLs)
     const inputBuffer = await fetchImageBuffer(inputImageUrl);
     const image = sharp(inputBuffer);
     const metadata = await image.metadata();
@@ -44,7 +49,6 @@ export const cropImageTask = task({
     const cropWidth = Math.max(1, Math.round((width / 100) * imgWidth));
     const cropHeight = Math.max(1, Math.round((height / 100) * imgHeight));
 
-    // Clamp so the crop box never exceeds image bounds
     const safeWidth = Math.min(cropWidth, imgWidth - left);
     const safeHeight = Math.min(cropHeight, imgHeight - top);
 
@@ -56,21 +60,24 @@ export const cropImageTask = task({
     // --- MANDATORY 30+ second artificial delay (hard requirement, do not skip) ---
     await wait.for({ seconds: 31 });
 
-    const filename = `${nanoid(12)}-crop.png`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    const filePath = path.join(uploadDir, filename);
-    await writeFile(filePath, croppedBuffer);
+    const filename = `crop-${Date.now()}.png`;
+    const outputImageUrl = await uploadBufferToTransloadit(croppedBuffer, filename, "image/png");
 
-    return { outputImageUrl: `/uploads/${filename}` };
+    return { outputImageUrl };
   },
 });
 
 async function fetchImageBuffer(url: string): Promise<Buffer> {
   if (url.startsWith("/uploads/")) {
-    const { readFile } = await import("fs/promises");
-    const filePath = path.join(process.cwd(), "public", url);
-    return readFile(filePath);
+    throw new Error(
+      `Cannot read local path "${url}" from inside a Trigger.dev task - Trigger.dev's cloud ` +
+        `runners don't share a filesystem with Vercel or your local dev server. Make sure ` +
+        `USE_LOCAL_UPLOAD_FALLBACK=false and real TRANSLOADIT_* credentials are set (in both ` +
+        `Vercel AND the Trigger.dev dashboard's Environment Variables) so uploaded images get ` +
+        `real http(s) URLs instead of local paths.`
+    );
   }
+
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch input image: ${res.status}`);
   const arrayBuffer = await res.arrayBuffer();
