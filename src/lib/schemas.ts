@@ -3,7 +3,7 @@ import { z } from "zod";
 export const requestFieldSchema = z.object({
   id: z.string(),
   name: z.string().min(1).max(80),
-  type: z.enum(["text_field", "image_field"]),
+  type: z.enum(["text_field", "image_field", "number_field"]),
   value: z.string().default(""),
 });
 

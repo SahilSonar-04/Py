@@ -299,6 +299,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   markSaved: () => set({ isDirty: false }),
 }));
 
+
 function getOutputType(
   node: PyNode,
   handle: string | null | undefined
@@ -307,7 +308,9 @@ function getOutputType(
   if (node.type === "request") {
     const data = node.data as { fields: { id: string; type: string }[] };
     const field = data.fields.find((f) => f.id === handle);
-    return field?.type === "image_field" ? "image" : "text";
+    if (field?.type === "image_field") return "image";
+    if (field?.type === "number_field") return "number";
+    return "text";
   }
   return NODE_OUTPUT_TYPES[`${node.type}:${handle}`] ?? "any";
 }

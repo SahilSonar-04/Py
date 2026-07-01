@@ -120,7 +120,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           >
             {GEMINI_MODELS.map((m) => (
               <option key={m} value={m}>
-                {m === "gemini-2.5-flash" ? "Gemini 2.5 Flash" : m}
+                {m === "gemini-2.5-flash" ? "Gemini 2.5 Flash" : m === "gemini-2.5-pro" ? "Gemini 2.5 Pro" : m}
               </option>
             ))}
           </select>

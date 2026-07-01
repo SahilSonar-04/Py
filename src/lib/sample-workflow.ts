@@ -1,3 +1,4 @@
+// src/lib/sample-workflow.ts
 import { nanoid } from "nanoid";
 import type {
   CropImageData,
@@ -115,8 +116,8 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     type: "gemini",
     position: { x: 480, y: -460 },
     data: {
-      label: "Gemini 3.1 Pro #1",
-      model: "gemini-3.1-pro",
+      label: "Gemini 2.5 Flash #1",
+      model: "gemini-2.5-flash",
       prompt: "",
       systemPrompt:
         "You are a marketing copywriter. Write a one-paragraph product description.",
@@ -134,8 +135,8 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     type: "gemini",
     position: { x: 960, y: -460 },
     data: {
-      label: "Gemini 3.1 Pro #2",
-      model: "gemini-3.1-pro",
+      label: "Gemini 2.5 Flash #2",
+      model: "gemini-2.5-flash",
       prompt: "",
       systemPrompt:
         "Condense the following product description into a tweet-length hook (under 240 characters).",
@@ -153,8 +154,8 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     type: "gemini",
     position: { x: 1440, y: 0 },
     data: {
-      label: "Gemini 3.1 Pro #3 (Final)",
-      model: "gemini-3.1-pro",
+      label: "Gemini 2.5 Flash #3 (Final)",
+      model: "gemini-2.5-flash",
       prompt: "",
       systemPrompt:
         "You are a social media manager. Combine the tweet hook and the two product crops into a final marketing post.",
@@ -182,17 +183,13 @@ export function sampleWorkflowGraph(): WorkflowGraph {
   };
 
   const edges: PyEdge[] = [
-    // Request-Inputs -> Crop#1, Crop#2, Gemini#1 (parallel fan-out)
     edge(requestId, imageFieldId, crop1Id, "input_image", "image"),
     edge(requestId, imageFieldId, crop2Id, "input_image", "image"),
     edge(requestId, textFieldId, gemini1Id, "prompt", "text"),
-    // Gemini#1 -> Gemini#2
     edge(gemini1Id, "response", gemini2Id, "prompt", "text"),
-    // Gemini#2 + both crops -> Gemini#3 (final)
     edge(gemini2Id, "response", gemini3Id, "prompt", "text"),
     edge(crop1Id, "output_image", gemini3Id, "image", "image"),
     edge(crop2Id, "output_image", gemini3Id, "image", "image"),
-    // Final Gemini + Crop#2 -> Response
     edge(gemini3Id, "response", responseId, "slot-gemini3", "any"),
     edge(crop2Id, "output_image", responseId, "slot-crop2", "any"),
   ];
