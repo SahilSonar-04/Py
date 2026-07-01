@@ -1,12 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useReactFlow } from "reactflow";
 import { NodePicker } from "./node-picker";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { StickyNoteData } from "@/types/workflow";
+
+function StickyNoteIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className}>
+      <rect
+        x="4"
+        y="4"
+        width="16"
+        height="16"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
 
 export function BottomToolbar({ historyOpen }: { historyOpen?: boolean }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -45,7 +61,8 @@ export function BottomToolbar({ historyOpen }: { historyOpen?: boolean }) {
           title="Add Sticky Note"
           className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-md transition-colors hover:bg-gray-50 hover:text-gray-800"
         >
-          <FileText className="h-4 w-4" />
+          <StickyNoteIcon className="h-4 w-4" />
+
         </button>
         <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
           Add Sticky Note

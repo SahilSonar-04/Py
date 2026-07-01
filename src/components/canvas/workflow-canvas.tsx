@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
-  Controls,
   ConnectionLineType,
   ReactFlowProvider,
+  useReactFlow,
   type Connection,
   type OnSelectionChangeParams,
 } from "reactflow";
+import { BottomLeftControls, useAutoArrange } from "./bottom-left-controls";
+import { KeyboardShortcutsModal } from "./keyboard-shortcuts-modal";
+import { nanoid } from "nanoid";
 import "reactflow/dist/style.css";
 import { useCanvasStore, isConnectionValid } from "@/store/canvas-store";
 import { nodeTypes } from "./node-types";
@@ -160,9 +163,14 @@ function CanvasInner({
   } = useCanvasStore();
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [connectionInvalid, setConnectionInvalid] = useState(false);
   const initialized = useRef(false);
   const connectingRef = useRef<ConnectingInfo | null>(null);
+  const clipboardRef = useRef<PyNode[]>([]);
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const handleAutoArrange = useAutoArrange();
 
   useEffect(() => {
     if (initialized.current) return;
@@ -224,27 +232,116 @@ function CanvasInner({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const isTyping = ["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName);
+
+      // Shortcuts modal: Escape closes it and takes priority over deselect.
+      if (shortcutsOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setShortcutsOpen(false);
+        }
+        return;
+      }
+
       if (isTyping) return;
 
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      const meta = e.metaKey || e.ctrlKey;
+
+      if (meta && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
         undo();
-      } else if (
-        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && e.shiftKey) ||
-        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y")
-      ) {
+        return;
+      }
+      if ((meta && e.key.toLowerCase() === "z" && e.shiftKey) || (meta && e.key.toLowerCase() === "y")) {
         e.preventDefault();
         redo();
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        const { selectedNodeIds } = useCanvasStore.getState();
-        selectedNodeIds.forEach((id) => {
+        return;
+      }
+
+      if (meta && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        const { nodes: currentNodes, setNodes: setNodesStore } = useCanvasStore.getState();
+        setNodesStore(currentNodes.map((n) => ({ ...n, selected: true })));
+        setSelectedNodeIds(currentNodes.map((n) => n.id));
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        useCanvasStore.getState().clearSelection();
+        return;
+      }
+
+      if (meta && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        const { nodes: currentNodes, selectedNodeIds: selected } = useCanvasStore.getState();
+        clipboardRef.current = currentNodes
+          .filter((n) => selected.includes(n.id) && !LOCKED_NODE_IDS.has(n.id))
+          .map((n) => ({ ...n, data: { ...n.data } }));
+        return;
+      }
+
+      if (meta && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        if (clipboardRef.current.length === 0) return;
+        const { nodes: currentNodes, setNodes: setNodesStore, pushHistory } = useCanvasStore.getState();
+        const pasted: PyNode[] = clipboardRef.current.map((n) => ({
+          ...n,
+          id: `${n.type}_${nanoid(8)}`,
+          position: { x: n.position.x + 40, y: n.position.y + 40 },
+          selected: true,
+          data: { ...n.data, status: "idle", error: undefined } as PyNode["data"],
+        }));
+        pushHistory();
+        setNodesStore([...currentNodes.map((n) => ({ ...n, selected: false })), ...pasted]);
+        setSelectedNodeIds(pasted.map((n) => n.id));
+        return;
+      }
+
+      if (meta && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        const { selectedNodeIds: selected, duplicateNode } = useCanvasStore.getState();
+        selected.forEach((id) => {
+          if (!LOCKED_NODE_IDS.has(id)) duplicateNode(id, e.shiftKey);
+        });
+        return;
+      }
+
+      if (!meta && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        zoomIn({ duration: 200 });
+        return;
+      }
+      if (!meta && e.key === "-") {
+        e.preventDefault();
+        zoomOut({ duration: 200 });
+        return;
+      }
+      if (!meta && !e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        fitView({ padding: 0.2, duration: 300 });
+        return;
+      }
+      if (!meta && !e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        setSelectMode((v) => !v);
+        return;
+      }
+      if (!meta && e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        handleAutoArrange();
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const { selectedNodeIds: selected } = useCanvasStore.getState();
+        selected.forEach((id) => {
           if (!LOCKED_NODE_IDS.has(id)) removeNode(id);
         });
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo, removeNode]);
+  }, [undo, redo, removeNode, setSelectedNodeIds, zoomIn, zoomOut, fitView, handleAutoArrange, shortcutsOpen]);
 
   const onSelectionChange = useCallback(
     ({ nodes: selected }: OnSelectionChangeParams) => {
@@ -402,9 +499,10 @@ function CanvasInner({
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
+        panOnDrag={!selectMode}
+        selectionOnDrag={selectMode}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <Controls position="bottom-left" showInteractive={false} />
       </ReactFlow>
 
       <WorkflowHeader workflowId={workflowId} />
@@ -414,8 +512,17 @@ function CanvasInner({
         historyOpen={historyOpen}
       />
       <BottomToolbar historyOpen={historyOpen} />
+      <div className="pointer-events-none absolute bottom-4 left-4 z-20">
+      <BottomLeftControls
+        selectMode={selectMode}
+        onToggleSelectMode={() => setSelectMode((v) => !v)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
+    </div>
       <MinimapToggle historyOpen={historyOpen} />
       <HistoryPanel workflowId={workflowId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      {shortcutsOpen && <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+
     </div>
   );
 }
