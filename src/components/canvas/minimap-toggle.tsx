@@ -31,6 +31,7 @@ export function MinimapToggle({ historyOpen }: { historyOpen?: boolean }) {
     >
       {!expanded ? (
         <button
+          suppressHydrationWarning
           onClick={() => setExpanded(true)}
           title="Show minimap"
           className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-md transition-colors hover:bg-gray-50 hover:text-gray-800"
@@ -40,6 +41,7 @@ export function MinimapToggle({ historyOpen }: { historyOpen?: boolean }) {
       ) : (
         <div className="relative overflow-hidden rounded-2xl border border-gray-800 bg-[#0b0b10] shadow-2xl">
           <button
+            suppressHydrationWarning
             onClick={() => setExpanded(false)}
             title="Hide minimap"
             className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-gray-300 transition-colors hover:bg-black/60 hover:text-white"

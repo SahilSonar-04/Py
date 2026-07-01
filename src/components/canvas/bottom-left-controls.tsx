@@ -34,6 +34,7 @@ function ControlButton({
   return (
     <span className="group relative">
       <button
+        suppressHydrationWarning
         type="button"
         onClick={onClick}
         disabled={disabled}
@@ -139,6 +140,7 @@ export function BottomLeftControls({
     return (
       <span className="group relative pointer-events-auto">
         <button
+          suppressHydrationWarning
           type="button"
           onClick={() => setExpanded(true)}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-md transition-colors hover:bg-gray-50 hover:text-gray-800"

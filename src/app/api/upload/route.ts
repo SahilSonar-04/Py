@@ -1,7 +1,7 @@
 // src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { readdir, writeFile } from "fs/promises";
+import { mkdir, readdir, writeFile } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { nanoid } from "nanoid";
@@ -13,21 +13,29 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const formData = await req.formData();
-  const file = formData.get("file");
+  try {
+    const formData = await req.formData();
+    const file = formData.get("file");
 
-  if (!file || !(file instanceof File)) {
-    return NextResponse.json({ error: "No file provided" }, { status: 400 });
-  }
-  if (!ALLOWED_TYPES.includes(file.type)) {
+    if (!file || !(file instanceof File)) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: `Unsupported file type: ${file.type}. Allowed: jpg, jpeg, png, webp, gif` },
+        { status: 400 }
+      );
+    }
+
+    const useLocalFallback = process.env.USE_LOCAL_UPLOAD_FALLBACK === "true";
+    return useLocalFallback ? await handleLocalUpload(file) : await handleTransloaditUpload(file);
+  } catch (err) {
+    console.error("[/api/upload] failed:", err);
     return NextResponse.json(
-      { error: `Unsupported file type: ${file.type}. Allowed: jpg, jpeg, png, webp, gif` },
-      { status: 400 }
+      { error: err instanceof Error ? err.message : "Upload failed unexpectedly" },
+      { status: 500 }
     );
   }
-
-  const useLocalFallback = process.env.USE_LOCAL_UPLOAD_FALLBACK === "true";
-  return useLocalFallback ? handleLocalUpload(file) : handleTransloaditUpload(file);
 }
 
 async function handleLocalUpload(file: File) {
@@ -36,6 +44,7 @@ async function handleLocalUpload(file: File) {
   const ext = file.name.split(".").pop() || "png";
   const filename = `${nanoid(12)}.${ext}`;
   const uploadDir = path.join(process.cwd(), "public", "uploads");
+  await mkdir(uploadDir, { recursive: true });
   const filePath = path.join(uploadDir, filename);
   await writeFile(filePath, buffer);
   return NextResponse.json({ url: `/uploads/${filename}` });

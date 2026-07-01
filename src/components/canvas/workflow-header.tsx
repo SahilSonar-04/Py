@@ -45,6 +45,7 @@ export function WorkflowHeader({ workflowId }: { workflowId: string }) {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <input
+          suppressHydrationWarning
           value={name}
           onChange={(e) => handleChange(e.target.value)}
           maxLength={120}

@@ -67,6 +67,7 @@ export function TopRightControls({
         <Pill label="Bal" value="0.00 M" />
 
         <button
+          suppressHydrationWarning
           onClick={handleRunClick}
           disabled={busy || isRunning}
           className="flex h-8 w-9 items-center justify-center rounded-lg border border-workflow-accent-400 bg-workflow-accent-500 text-white shadow-sm hover:bg-workflow-accent-600 disabled:cursor-not-allowed disabled:opacity-60"
@@ -86,6 +87,7 @@ export function TopRightControls({
         </button>
 
         <button
+          suppressHydrationWarning
           onClick={onToggleHistory}
           className={`flex h-8 w-9 items-center justify-center rounded-lg border shadow-sm transition-colors ${
             historyOpen
