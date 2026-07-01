@@ -9,16 +9,33 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const parsed = geminiTaskInputSchema.safeParse(body);
   if (!parsed.success) {
-    const message =
-      parsed.error.issues.map((i) => i.message).join("; ") || "Invalid input";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   try {
     const { geminiTask } = await import("@/trigger/gemini");
-    const { triggerAndWaitOutsideTask } = await import("@/lib/trigger-helpers");
-    const result = await triggerAndWaitOutsideTask(geminiTask, parsed.data);
-    return NextResponse.json({ response: result.response });
+    const { runs } = await import("@trigger.dev/sdk/v3");
+
+    // Same fix as the crop-image route: triggerAndWait() requires being
+    // called from inside a running task, which an API route is not.
+    const handle = await geminiTask.trigger(parsed.data);
+    const run = await runs.poll(handle.id, { pollIntervalMs: 2000 });
+
+    if (run.status !== "COMPLETED") {
+      const errObj = (run as unknown as { error?: { message?: string } }).error;
+      const message = errObj?.message ?? `Task ended with status: ${run.status}`;
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+
+    const output = run.output as { response?: string } | undefined;
+    if (output?.response === undefined) {
+      return NextResponse.json(
+        { error: "Task completed but returned no output" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ response: output.response });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Gemini task failed" },
