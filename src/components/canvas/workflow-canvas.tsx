@@ -19,7 +19,14 @@ import { BottomToolbar } from "./bottom-toolbar";
 import { TopRightControls } from "./top-right-controls";
 import { WorkflowHeader } from "./workflow-header";
 import { HistoryPanel } from "./history-panel";
-import type { PyEdge, PyNode, ResponseData, ResponseSlot } from "@/types/workflow";
+import type {
+  NodeExecutionView,
+  PyEdge,
+  PyNode,
+  ResponseData,
+  ResponseSlot,
+  WorkflowRunView,
+} from "@/types/workflow";
 
 const LOCKED_NODE_IDS = new Set(["request-inputs", "response"]);
 
@@ -28,6 +35,75 @@ type ConnectingInfo = {
   handleId: string | null;
   handleType: "source" | "target";
 };
+
+/**
+ * Applies a run's NodeExecution rows onto the canvas store - node status
+ * (idle/running/success/failed) plus any output payload (crop output image,
+ * gemini response text, response-node slots).
+ *
+ * This is a plain function (not a hook) that reads store actions via
+ * getState() so it can be called both from the live-poll effect AND from
+ * the one-off mount-time reconciliation effect below, without either one
+ * needing to depend on the other.
+ */
+function applyRunExecutionsToStore(nodeExecutions: NodeExecutionView[]) {
+  const { setNodeStatus, updateNodeData } = useCanvasStore.getState();
+
+  for (const exec of nodeExecutions) {
+    const status =
+      exec.status === "RUNNING"
+        ? "running"
+        : exec.status === "SUCCESS"
+        ? "success"
+        : exec.status === "FAILED"
+        ? "failed"
+        : "idle";
+    setNodeStatus(exec.nodeId, status);
+
+    if (exec.status === "SUCCESS" && exec.output && typeof exec.output === "object") {
+      const output = exec.output as Record<string, unknown>;
+
+      if (exec.nodeType === "crop_image" && typeof output.output_image === "string") {
+        updateNodeData(exec.nodeId, { outputImageUrl: output.output_image, error: undefined });
+      } else if (exec.nodeType === "gemini" && typeof output.response === "string") {
+        updateNodeData(exec.nodeId, { response: output.response, error: undefined });
+      } else if (exec.nodeType === "response") {
+        // The Response node renders from `data.slots[]`, not from a flat
+        // field - the orchestrator's output for this node type is a map
+        // keyed by target handle id (e.g. { result: "..." } for the
+        // default canvas, or { "slot-gemini3": "...", "slot-crop2": "..." }
+        // for the sample workflow).
+        const currentNode = useCanvasStore.getState().nodes.find((n) => n.id === exec.nodeId);
+        const currentSlots: ResponseSlot[] =
+          currentNode && currentNode.type === "response"
+            ? (currentNode.data as ResponseData).slots ?? []
+            : [];
+
+        const nextSlots: ResponseSlot[] = [...currentSlots];
+        for (const [key, value] of Object.entries(output)) {
+          const stringValue =
+            typeof value === "string" ? value : value != null ? JSON.stringify(value) : "";
+          const existingIndex = nextSlots.findIndex((s) => s.id === key);
+          if (existingIndex >= 0) {
+            nextSlots[existingIndex] = { ...nextSlots[existingIndex], value: stringValue };
+          } else {
+            nextSlots.push({ id: key, label: key, value: stringValue });
+          }
+        }
+
+        updateNodeData(exec.nodeId, { slots: nextSlots });
+      }
+    }
+
+    if (exec.status === "FAILED" && exec.error) {
+      updateNodeData(exec.nodeId, { error: exec.error });
+    }
+  }
+}
+
+function isTerminalRunStatus(status: WorkflowRunView["status"]) {
+  return status !== "RUNNING" && status !== "PENDING";
+}
 
 export function WorkflowCanvas({
   workflowId,
@@ -79,8 +155,6 @@ function CanvasInner({
     markSaved,
     isRunning,
     setRunning,
-    setNodeStatus,
-    updateNodeData,
   } = useCanvasStore();
 
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -93,6 +167,44 @@ function CanvasInner({
     initialized.current = true;
     setWorkflow(workflowId, initialName, initialNodes, initialEdges);
   }, [workflowId, initialName, initialNodes, initialEdges, setWorkflow]);
+
+  // --- Reconcile with the latest run on mount ---
+  // Runs once per workflowId, independent of the local `isRunning` flag
+  // (which lives only in memory and is lost on reload/navigation/HMR).
+  // Without this, a run that finishes while nobody is actively polling
+  // (or whose poll loop got interrupted) leaves the canvas frozen on
+  // stale data forever, even though the History panel - which always
+  // re-fetches fresh from the DB - shows the correct final result.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function reconcile() {
+      try {
+        const res = await fetch(`/api/runs?workflowId=${workflowId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const latestRun: WorkflowRunView | undefined = json.runs?.[0];
+        if (!latestRun || cancelled) return;
+
+        applyRunExecutionsToStore(latestRun.nodeExecutions);
+
+        // If the most recent run is still in flight, resume live polling
+        // (the effect below) instead of leaving the canvas stuck on
+        // whatever partial state we just reconciled.
+        if (!isTerminalRunStatus(latestRun.status)) {
+          setRunning(true);
+        }
+      } catch {
+        // Best-effort reconciliation - a transient failure here just means
+        // the canvas stays on its last-saved state, same as before.
+      }
+    }
+
+    reconcile();
+    return () => {
+      cancelled = true;
+    };
+  }, [workflowId, setRunning]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -232,73 +344,27 @@ function CanvasInner({
     ? { stroke: "#ef4444", strokeWidth: 2.5, strokeDasharray: "6 4" }
     : { stroke: "#6366f1", strokeWidth: 2.5 };
 
+  // --- Live polling while a run is actively in progress ---
   useEffect(() => {
     if (!isRunning) return;
     let cancelled = false;
 
     async function poll() {
-      const res = await fetch(`/api/runs?workflowId=${workflowId}`);
-      const json = await res.json();
-      const latestRun = json.runs?.[0];
-      if (!latestRun || cancelled) return;
+      try {
+        const res = await fetch(`/api/runs?workflowId=${workflowId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const latestRun: WorkflowRunView | undefined = json.runs?.[0];
+        if (!latestRun || cancelled) return;
 
-      for (const exec of latestRun.nodeExecutions) {
-        const status =
-          exec.status === "RUNNING"
-            ? "running"
-            : exec.status === "SUCCESS"
-            ? "success"
-            : exec.status === "FAILED"
-            ? "failed"
-            : "idle";
-        setNodeStatus(exec.nodeId, status);
+        applyRunExecutionsToStore(latestRun.nodeExecutions);
 
-        if (exec.status === "SUCCESS" && exec.output && typeof exec.output === "object") {
-          const output = exec.output as Record<string, unknown>;
-
-          if (exec.nodeType === "crop_image" && typeof output.output_image === "string") {
-            updateNodeData(exec.nodeId, { outputImageUrl: output.output_image, error: undefined });
-          } else if (exec.nodeType === "gemini" && typeof output.response === "string") {
-            updateNodeData(exec.nodeId, { response: output.response, error: undefined });
-          } else if (exec.nodeType === "response") {
-            // The Response node renders from `data.slots[]`, not from a flat
-            // field - the orchestrator's output for this node type is a map
-            // keyed by target handle id (e.g. { result: "..." } for the
-            // default canvas, or { "slot-gemini3": "...", "slot-crop2": "..." }
-            // for the sample workflow). Without this branch, Response would
-            // stay "No output yet" forever even once polling + status sync
-            // worked correctly, because nothing ever wrote into `slots`.
-            const currentNode = useCanvasStore
-              .getState()
-              .nodes.find((n) => n.id === exec.nodeId);
-            const currentSlots: ResponseSlot[] =
-              currentNode && currentNode.type === "response"
-                ? (currentNode.data as ResponseData).slots ?? []
-                : [];
-
-            const nextSlots: ResponseSlot[] = [...currentSlots];
-            for (const [key, value] of Object.entries(output)) {
-              const stringValue =
-                typeof value === "string" ? value : value != null ? JSON.stringify(value) : "";
-              const existingIndex = nextSlots.findIndex((s) => s.id === key);
-              if (existingIndex >= 0) {
-                nextSlots[existingIndex] = { ...nextSlots[existingIndex], value: stringValue };
-              } else {
-                nextSlots.push({ id: key, label: key, value: stringValue });
-              }
-            }
-
-            updateNodeData(exec.nodeId, { slots: nextSlots });
-          }
+        if (isTerminalRunStatus(latestRun.status)) {
+          setRunning(false);
         }
-
-        if (exec.status === "FAILED" && exec.error) {
-          updateNodeData(exec.nodeId, { error: exec.error });
-        }
-      }
-
-      if (latestRun.status !== "RUNNING" && latestRun.status !== "PENDING") {
-        setRunning(false);
+      } catch {
+        // Transient network/API hiccup - just try again on the next tick
+        // rather than letting an unhandled rejection silently kill polling.
       }
     }
 
@@ -308,7 +374,7 @@ function CanvasInner({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isRunning, workflowId, setNodeStatus, updateNodeData, setRunning]);
+  }, [isRunning, workflowId, setRunning]);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#fafafa]">
