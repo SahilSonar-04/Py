@@ -153,3 +153,11 @@ body {
 .node-card:hover .handle-halo {
   opacity: 1;
 }
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+.react-flow__handle {
+  cursor: pointer !important;
+}

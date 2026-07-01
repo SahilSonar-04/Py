@@ -2,7 +2,7 @@ import { task } from "@trigger.dev/sdk/v3";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export interface GeminiTaskPayload {
-  model: string; // e.g. "gemini-3.1-pro"
+  model: string; 
   prompt: string;
   systemPrompt?: string;
   imageUrls?: string[]; // supports multiple connections per spec (vision)
@@ -86,9 +86,8 @@ function mapModelName(modelId: string): string {
   // If you later enable billing and want Pro-quality output, change the
   // right-hand side back to "gemini-2.5-pro".
   const map: Record<string, string> = {
-    "gemini-3.1-pro": "gemini-2.5-flash",
-    "gemini-2.5-pro": "gemini-2.5-flash",
     "gemini-2.5-flash": "gemini-2.5-flash",
+    "gemini-2.5-pro": "gemini-2.5-pro",
   };
   return map[modelId] ?? modelId;
 }

@@ -46,7 +46,7 @@ function buildItems(): PickerItem[] {
     },
     {
       id: "gemini",
-      label: "Gemini 3.1 Pro",
+      label: "Gemini 2.5 Flash",
       description: "Generate text - supports vision, video, audio, file inputs",
       category: "Others",
       icon: <Sparkles className="h-4 w-4" />,
@@ -54,7 +54,7 @@ function buildItems(): PickerItem[] {
       create: () => ({
         type: "gemini",
         data: {
-          label: "Gemini 3.1 Pro", model: "gemini-3.1-pro", prompt: "", systemPrompt: "",
+          label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", prompt: "", systemPrompt: "",
           imageUrls: [], videoUrl: "", audioUrl: "", fileUrl: "", status: "idle", settingsOpen: false,
         } as GeminiData,
       }),

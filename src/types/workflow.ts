@@ -44,9 +44,8 @@ export interface CropImageData {
 
 // ---------- Gemini node ----------
 export const GEMINI_MODELS = [
-  "gemini-3.1-pro",
-  "gemini-2.5-pro",
   "gemini-2.5-flash",
+  "gemini-2.5-pro",
 ] as const;
 export type GeminiModel = (typeof GEMINI_MODELS)[number];
 
