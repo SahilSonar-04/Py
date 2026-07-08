@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { Plus, Workflow as WorkflowIcon, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Workflow as WorkflowIcon, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
+import {
+  downloadWorkflowJson,
+  parseWorkflowImport,
+  ensureLockedNodesPresent,
+  WorkflowImportError,
+} from "@/lib/workflow-io";
 
 interface WorkflowSummary {
   id: string;
@@ -24,6 +30,8 @@ function ClientFormattedDate({ iso }: { iso: string }) {
 export function DashboardClient({ initialWorkflows }: { initialWorkflows: WorkflowSummary[] }) {
   const [workflows, setWorkflows] = useState(initialWorkflows);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const router = useRouter();
@@ -72,6 +80,47 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
     });
   }
 
+  async function exportWorkflow(id: string) {
+    setExportingId(id);
+    try {
+      const res = await fetch(`/api/workflows/${id}`);
+      const json = await res.json();
+      if (!json.workflow) return;
+      const graph = json.workflow.graph as { nodes: unknown[]; edges: unknown[] };
+      downloadWorkflowJson(
+        json.workflow.name,
+        graph.nodes as never,
+        graph.edges as never
+      );
+    } finally {
+      setExportingId(null);
+    }
+  }
+
+  async function importWorkflow(file: File) {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = parseWorkflowImport(text);
+      const nodes = ensureLockedNodesPresent(parsed.nodes);
+      const res = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: parsed.name ?? "Imported Workflow",
+          graph: { nodes, edges: parsed.edges },
+        }),
+      });
+      const json = await res.json();
+      if (json.workflow?.id) router.push(`/workflows/${json.workflow.id}`);
+      else alert("Import failed: server rejected the workflow.");
+    } catch (err) {
+      alert(err instanceof WorkflowImportError ? err.message : "Import failed.");
+    } finally {
+      setImporting(false);
+    }
+  }  
+
   return (
     <div className="flex h-screen w-screen flex-col bg-[#fafafa]">
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
@@ -93,12 +142,37 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
             >
               Load Sample Workflow
             </button>
+
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+              {importing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Import
+              <input
+                type="file"
+                accept="application/json,.json"
+                hidden
+                disabled={importing}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importWorkflow(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+
             <button
               onClick={createWorkflow}
               disabled={creating}
               className="flex items-center gap-2 rounded-lg bg-workflow-accent-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-workflow-accent-600 disabled:opacity-60"
             >
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
               New Workflow
             </button>
           </div>
@@ -107,7 +181,9 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
         {workflows.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white py-20 text-center">
             <WorkflowIcon className="mb-3 h-10 w-10 text-gray-300" />
-            <p className="mb-1 text-sm font-medium text-gray-700">No workflows yet</p>
+            <p className="mb-1 text-sm font-medium text-gray-700">
+              No workflows yet
+            </p>
             <p className="mb-4 text-xs text-gray-400">
               Create your first workflow to start building with LLM nodes.
             </p>
@@ -129,9 +205,13 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                   <th className="px-4 py-2.5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
+
               <tbody>
                 {workflows.map((w) => (
-                  <tr key={w.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                  <tr
+                    key={w.id}
+                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50"
+                  >
                     <td className="px-4 py-3">
                       {renamingId === w.id ? (
                         <input
@@ -139,7 +219,9 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
                           onBlur={() => confirmRename(w.id)}
-                          onKeyDown={(e) => e.key === "Enter" && confirmRename(w.id)}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && confirmRename(w.id)
+                          }
                           className="rounded border border-gray-300 px-2 py-1 text-sm outline-none"
                         />
                       ) : (
@@ -151,6 +233,7 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                         </button>
                       )}
                     </td>
+
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
@@ -162,9 +245,11 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                         {w.status === "running" ? "Running" : "Idle"}
                       </span>
                     </td>
+
                     <td className="px-4 py-3 text-xs text-gray-500">
                       <ClientFormattedDate iso={w.updatedAt} />
                     </td>
+
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
@@ -173,6 +258,7 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                         >
                           Open
                         </button>
+
                         <button
                           onClick={() => {
                             setRenamingId(w.id);
@@ -183,6 +269,20 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
+
+                        <button
+                          onClick={() => exportWorkflow(w.id)}
+                          disabled={exportingId === w.id}
+                          className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                          title="Export as JSON"
+                        >
+                          {exportingId === w.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+
                         <button
                           onClick={() => deleteWorkflow(w.id)}
                           className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"

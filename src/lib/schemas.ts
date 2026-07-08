@@ -9,7 +9,7 @@ export const requestFieldSchema = z.object({
 
 export const rfNodeSchema = z.object({
   id: z.string(),
-  type: z.enum(["request", "crop_image", "gemini", "response"]),
+  type: z.enum(["request", "crop_image", "gemini", "response", "sticky_note"]), 
   position: z.object({ x: z.number(), y: z.number() }),
   data: z.record(z.string(), z.any()),
   width: z.number().nullable().optional(),
