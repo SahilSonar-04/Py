@@ -28,6 +28,18 @@ function filterLabel(f: StatusFilter) {
   return f === "All" ? "All" : f[0] + f.slice(1).toLowerCase();
 }
 
+/** Renders any input/output value fully — pretty-printed JSON for objects/arrays,
+ * plain text for strings — so nothing is silently truncated in the history panel. */
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 export function HistoryPanel({
   workflowId,
   open,
@@ -39,6 +51,7 @@ export function HistoryPanel({
 }) {
   const [runs, setRuns] = useState<WorkflowRunView[]>([]);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"ui" | "api">("ui");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
@@ -71,6 +84,23 @@ export function HistoryPanel({
     () => (statusFilter === "All" ? runs : runs.filter((r) => r.status === statusFilter)),
     [runs, statusFilter]
   );
+
+  function toggleRun(runId: string) {
+    setExpandedRunId((prev) => (prev === runId ? null : runId));
+    setExpandedNodeIds(new Set());
+  }
+
+  function toggleNode(execId: string) {
+    setExpandedNodeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(execId)) {
+        next.delete(execId);
+      } else {
+        next.add(execId);
+      }
+      return next;
+    });
+  }
 
   return (
     <div
@@ -158,7 +188,7 @@ export function HistoryPanel({
                 return (
                   <div key={run.id} className="rounded-lg border border-gray-200">
                     <button
-                      onClick={() => setExpandedRunId(isExpanded ? null : run.id)}
+                      onClick={() => toggleRun(run.id)}
                       className="flex w-full items-center justify-between px-3 py-2.5 text-left"
                     >
                       <div className="min-w-0 flex-1">
@@ -195,30 +225,95 @@ export function HistoryPanel({
                         {run.nodeExecutions.length === 0 && (
                           <p className="text-[11px] text-gray-400">No node executions recorded.</p>
                         )}
-                        {run.nodeExecutions.map((exec) => (
-                          <div key={exec.id} className="rounded bg-gray-50 px-2 py-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="truncate text-[11px] font-medium text-gray-700">
-                                {NODE_STATUS_ICON[exec.status] ?? ""} {exec.nodeLabel ?? exec.nodeType}
-                              </span>
-                              {exec.durationMs !== null && (
-                                <span className="shrink-0 text-[10px] text-gray-400">
-                                  {(exec.durationMs / 1000).toFixed(1)}s
+                        {run.nodeExecutions.map((exec) => {
+                          const nodeExpanded = expandedNodeIds.has(exec.id);
+                          const hasDetails =
+                            exec.inputs !== null && exec.inputs !== undefined
+                              ? true
+                              : exec.output !== null && exec.output !== undefined;
+                          return (
+                            <div key={exec.id} className="rounded bg-gray-50 px-2 py-1.5">
+                              <button
+                                onClick={() => toggleNode(exec.id)}
+                                className="flex w-full items-center justify-between text-left"
+                              >
+                                <span className="flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-gray-700">
+                                  {hasDetails &&
+                                    (nodeExpanded ? (
+                                      <ChevronDown className="h-3 w-3 shrink-0 text-gray-400" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3 shrink-0 text-gray-400" />
+                                    ))}
+                                  {NODE_STATUS_ICON[exec.status] ?? ""} {exec.nodeLabel ?? exec.nodeType}
                                 </span>
+                                {exec.durationMs !== null && (
+                                  <span className="shrink-0 text-[10px] text-gray-400">
+                                    {(exec.durationMs / 1000).toFixed(1)}s
+                                  </span>
+                                )}
+                              </button>
+
+                              {/* Collapsed preview — single-line, truncated */}
+                              {!nodeExpanded && exec.output ? (
+                                <p className="mt-0.5 truncate text-[10px] text-gray-500">
+                                  → {formatValue(exec.output).slice(0, 80)}
+                                </p>
+                              ) : null}
+                              {!nodeExpanded && exec.error && (
+                                <p className="mt-0.5 truncate text-[10px] text-red-500">{exec.error}</p>
+                              )}
+
+                              {/* Expanded — full, non-truncated detail: inputs, output, error, timing */}
+                              {nodeExpanded && (
+                                <div className="mt-1.5 space-y-1.5 border-t border-gray-200 pt-1.5">
+                                  <div className="grid grid-cols-2 gap-1 text-[10px] text-gray-500">
+                                    <span>
+                                      Started:{" "}
+                                      {exec.startedAt ? new Date(exec.startedAt).toLocaleTimeString() : "—"}
+                                    </span>
+                                    <span>
+                                      Finished:{" "}
+                                      {exec.finishedAt ? new Date(exec.finishedAt).toLocaleTimeString() : "—"}
+                                    </span>
+                                  </div>
+
+                                  {exec.inputs !== null && exec.inputs !== undefined && (
+                                    <div>
+                                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                        Inputs
+                                      </p>
+                                      <pre className="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-white px-2 py-1.5 text-[10px] text-gray-700 ring-1 ring-gray-200">
+                                        {formatValue(exec.inputs)}
+                                      </pre>
+                                    </div>
+                                  )}
+
+                                  {exec.output !== null && exec.output !== undefined && (
+                                    <div>
+                                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                        Output
+                                      </p>
+                                      <pre className="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-white px-2 py-1.5 text-[10px] text-gray-700 ring-1 ring-gray-200">
+                                        {formatValue(exec.output)}
+                                      </pre>
+                                    </div>
+                                  )}
+
+                                  {exec.error && (
+                                    <div>
+                                      <p className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
+                                        Error
+                                      </p>
+                                      <pre className="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-red-50 px-2 py-1.5 text-[10px] text-red-600 ring-1 ring-red-200">
+                                        {exec.error}
+                                      </pre>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                             </div>
-                            {exec.output ? (
-                              <p className="mt-0.5 truncate text-[10px] text-gray-500">
-                                → {JSON.stringify(exec.output).slice(0, 80)}
-                              </p>
-                            ) : null}
-                            {exec.error && (
-                              <p className="mt-0.5 whitespace-pre-wrap break-words text-[10px] text-red-500">
-                                {exec.error}
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
