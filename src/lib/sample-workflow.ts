@@ -10,7 +10,6 @@ import type {
   WorkflowGraph,
 } from "@/types/workflow";
 
-/** A brand-new blank canvas: just Request-Inputs (left) + Response (right), per spec. */
 export function blankWorkflowGraph(): WorkflowGraph {
   const requestNode: PyNode = {
     id: "request-inputs",
@@ -37,18 +36,6 @@ export function blankWorkflowGraph(): WorkflowGraph {
   return { nodes: [requestNode, responseNode], edges: [] };
 }
 
-/**
- * The required sample workflow from the spec:
- * Request-Inputs -> Crop#1, Crop#2, Gemini#1 (parallel)
- * Gemini#1 -> Gemini#2
- * Gemini#2 + Crop#1 + Crop#2 -> Gemini#3 (final)
- * Gemini#3 -> Response
- *
- * (Crop Image #2 feeds Final Gemini's vision input, same as before - it just
- * no longer *also* fans out into Response. Response only collects the final
- * Gemini's text output, and everything shown there is now derived live from
- * actual edges rather than a manually pre-populated slot list.)
- */
 export function sampleWorkflowGraph(): WorkflowGraph {
   const requestId = "request-inputs";
   const crop1Id = "crop-image-1";
@@ -196,6 +183,14 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     edge(crop1Id, "output_image", gemini3Id, "image", "image"),
     edge(crop2Id, "output_image", gemini3Id, "image", "image"),
     edge(gemini3Id, "response", responseId, "result", "any"),
+    // Per spec row 7: Response collects BOTH Final Gemini's text output
+    // AND Crop Image #2's cropped image directly - this was previously
+    // missing, leaving Response wired to only one of the two required
+    // sources. Response's "result" handle allows multiple connections
+    // (see isConnectionValid's allowsMulti check for "image"/"any" types
+    // in canvas-store.ts), so this is additive alongside the edge above,
+    // not a replacement for it.
+    edge(crop2Id, "output_image", responseId, "result", "image"),
   ];
 
   return {
