@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Position, type NodeProps } from "reactflow";
-import { FileOutput, Info, Pencil, Trash2 } from "lucide-react";
+import { FileOutput, Info, Pencil, Trash2, Check, X } from "lucide-react";
 import { TypedHandle } from "./typed-handle";
 import { useCanvasStore } from "@/store/canvas-store";
 import { labelForResponseSource } from "@/lib/response-label";
@@ -14,19 +15,48 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const pushHistory = useCanvasStore((s) => s.pushHistory);
 
+  const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
   const incomingEdges = edges.filter((e) => e.target === id && e.targetHandle === "result");
 
   const rows = incomingEdges.map((edge) => {
     const sourceNode = nodes.find((n) => n.id === edge.source);
-    const label = labelForResponseSource(sourceNode, edge.sourceHandle ?? null);
+    const defaultLabel = labelForResponseSource(sourceNode, edge.sourceHandle ?? null);
     const cached = data.slots.find((s) => s.id === edge.id);
-    return { edgeId: edge.id, label, value: cached?.value };
+    const displayLabel = cached?.customLabel?.trim() ? cached.customLabel : defaultLabel;
+    return { edgeId: edge.id, defaultLabel, displayLabel, value: cached?.value };
   });
 
   function handleDisconnect(edgeId: string) {
     pushHistory();
     setEdges(edges.filter((e) => e.id !== edgeId));
     updateNodeData(id, { slots: data.slots.filter((s) => s.id !== edgeId) });
+  }
+
+  function startEditing(edgeId: string, currentLabel: string) {
+    setEditingEdgeId(edgeId);
+    setEditValue(currentLabel);
+  }
+
+  function cancelEditing() {
+    setEditingEdgeId(null);
+    setEditValue("");
+  }
+
+  function commitEditing(edgeId: string, defaultLabel: string) {
+    const trimmed = editValue.trim();
+    pushHistory();
+
+    const existingIndex = data.slots.findIndex((s) => s.id === edgeId);
+    const nextSlots =
+      existingIndex >= 0
+        ? data.slots.map((s, i) => (i === existingIndex ? { ...s, customLabel: trimmed } : s))
+        : [...data.slots, { id: edgeId, label: defaultLabel, customLabel: trimmed }];
+
+    updateNodeData(id, { slots: nextSlots });
+    setEditingEdgeId(null);
+    setEditValue("");
   }
 
   return (
@@ -61,33 +91,71 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
           <p className="py-8 text-center text-xs text-gray-400">No output added yet</p>
         ) : (
           <div className="space-y-3">
-            {rows.map((row) => (
-              <div key={row.edgeId} className="space-y-2 rounded-lg bg-[#F5F5F5] p-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900" title={row.label}>
-                    {row.label}
-                  </span>
-                  <button
-                    className="nodrag rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
-                    title="Rename"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => handleDisconnect(row.edgeId)}
-                    className="nodrag rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-500"
-                    title="Remove connection"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+            {rows.map((row) => {
+              const isEditing = editingEdgeId === row.edgeId;
+              return (
+                <div key={row.edgeId} className="space-y-2 rounded-lg bg-[#F5F5F5] p-3">
+                  <div className="flex items-center gap-1.5">
+                    {isEditing ? (
+                      <>
+                        <input
+                          autoFocus
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitEditing(row.edgeId, row.defaultLabel);
+                            if (e.key === "Escape") cancelEditing();
+                          }}
+                          className="nodrag min-w-0 flex-1 rounded border border-workflow-accent-400 bg-white px-1.5 py-0.5 text-sm text-gray-900 outline-none"
+                        />
+                        <button
+                          onClick={() => commitEditing(row.edgeId, row.defaultLabel)}
+                          className="nodrag rounded p-1 text-gray-400 hover:bg-green-100 hover:text-green-600"
+                          title="Save name"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="nodrag rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                          title="Cancel"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          className="min-w-0 flex-1 truncate text-sm text-gray-900"
+                          title={row.displayLabel}
+                        >
+                          {row.displayLabel}
+                        </span>
+                        <button
+                          onClick={() => startEditing(row.edgeId, row.displayLabel)}
+                          className="nodrag rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                          title="Rename"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDisconnect(row.edgeId)}
+                          className="nodrag rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-500"
+                          title="Remove connection"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="nodrag nowheel max-h-40 overflow-y-auto rounded border border-gray-200 bg-white px-2 py-2">
+                    <span className="block whitespace-pre-wrap break-words text-xs text-gray-700">
+                      {row.value ? String(row.value) : "No output yet"}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex h-10 items-center justify-center rounded border border-gray-200 bg-white">
-                  <span className="truncate px-2 text-xs text-gray-400">
-                    {row.value ? String(row.value).slice(0, 60) : "No output yet"}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

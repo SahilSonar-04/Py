@@ -69,6 +69,8 @@ export interface ResponseSlot {
   id: string;
   label: string;
   value?: string;
+
+  customLabel?: string;
 }
 
 export interface ResponseData {
