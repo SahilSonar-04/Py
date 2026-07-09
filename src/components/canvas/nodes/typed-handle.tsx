@@ -27,13 +27,8 @@ export function TypedHandle({
 }) {
   const color = COLOR_MAP[dataType];
   return (
-    // Sized to exactly match the 14px dot so the Handle's own internal
-    // centering math (which positions it relative to the nearest
-    // positioned ancestor) lands in the same spot it always has.
     <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
-      {/* Soft halo, hidden by default — revealed via .node-card:hover in
-          globals.css. Adjacent handles' halos overlap slightly, which is
-          what creates the "connected glow line" look down the node edge. */}
+      {}
       <span
         className="handle-halo"
         style={{ backgroundColor: `${color}2e`, boxShadow: `0 0 0 1px ${color}33` }}
@@ -43,10 +38,6 @@ export function TypedHandle({
         position={position}
         id={id}
         style={{
-          // Override React Flow's default edge-relative positioning
-          // (e.g. .react-flow__handle-right { right: -4px; transform:
-          // translate(100%, -50%) }) which otherwise fights with the
-          // halo's centering and renders the dot visibly off-center.
           position: "absolute",
           top: "50%",
           left: "50%",

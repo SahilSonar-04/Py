@@ -192,8 +192,7 @@ function CanvasInner({
           setRunning(true);
         }
       } catch {
-        // Best-effort reconciliation - a transient failure here just means
-        // the canvas stays on its last-saved state, same as before.
+        // Transient network/API hiccup - just try again on the next tick
       }
     }
 

@@ -16,8 +16,6 @@ export async function POST(req: NextRequest) {
     const { geminiTask } = await import("@/trigger/gemini");
     const { runs } = await import("@trigger.dev/sdk/v3");
 
-    // Same fix as the crop-image route: triggerAndWait() requires being
-    // called from inside a running task, which an API route is not.
     const handle = await geminiTask.trigger(parsed.data);
     const run = await runs.poll(handle.id, { pollIntervalMs: 2000 });
 

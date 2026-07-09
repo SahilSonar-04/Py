@@ -38,7 +38,7 @@ export function BottomToolbar({ historyOpen }: { historyOpen?: boolean }) {
       className="pointer-events-none absolute bottom-4 left-1/2 z-20 flex items-center gap-2 transition-transform duration-300 ease-in-out"
       style={{ transform: historyOpen ? "translateX(calc(-50% - 180px))" : "translateX(-50%)" }}
     >
-      {/* Sticky note + Add-node share one pill, matching the reference screenshot */}
+      {}
       <div className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-gray-200 bg-white/95 px-1 py-1 shadow-md backdrop-blur-sm md:gap-1 md:px-1.5 md:py-1.5">
         <span className="group relative">
           <button

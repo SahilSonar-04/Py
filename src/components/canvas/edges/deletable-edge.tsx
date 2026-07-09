@@ -10,11 +10,6 @@ import {
 import { X } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 
-/**
- * Static (non-animated) bezier edge with a hover-revealed delete (×) button
- * at the midpoint. Hovering anywhere along the curve counts, since BaseEdge
- * renders a wide invisible interaction stroke under the visible line.
- */
 function DeletableEdgeInner({
   id,
   sourceX,

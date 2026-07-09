@@ -22,7 +22,6 @@ export function ParamSlider({
   defaultValue: number;
   disabled?: boolean;
   info?: string;
-  /** Hides the "Add to Request" button once this handle already has a connection. */
   connected?: boolean;
   onChange: (v: number) => void;
   onAddToRequest?: () => void;

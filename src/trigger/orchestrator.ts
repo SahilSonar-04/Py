@@ -1,4 +1,3 @@
-// src/trigger/orchestrator.ts
 import { task, runs } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/prisma";
 import { cropImageTask, type CropImagePayload } from "./crop-image";
@@ -48,9 +47,7 @@ export const orchestratorTask = task({
       upstream.set(edge.target, list);
     }
 
-    // Memoized per-node promise. Multiple downstream nodes sharing an
-    // upstream dependency all await the SAME promise, so that shared node
-    // only ever executes once no matter how many dependents it fans out to.
+
     const nodePromises = new Map<string, Promise<Record<string, unknown>>>();
 
     function getNodeOutput(nodeId: string): Promise<Record<string, unknown>> {
@@ -66,11 +63,6 @@ export const orchestratorTask = task({
       const node = nodeMap.get(nodeId);
       if (!node) return {};
 
-      // Await ONLY this node's direct upstream deps - each resolved
-      // concurrently via Promise.all, recursively fanning out up the graph.
-      // This is the entire mechanism that makes concurrency DAG-shaped
-      // instead of wave-shaped: a node with no shared ancestor with some
-      // other branch has nothing here to wait on and starts immediately.
       const depEdges = upstream.get(nodeId) ?? [];
       const deps: ResolvedDep[] = await Promise.all(
         depEdges.map(async (d) => ({ ...d, output: await getNodeOutput(d.sourceNodeId) }))
@@ -203,9 +195,6 @@ async function executeCropNode(
   const start = Date.now();
 
   try {
-    // trigger() returns immediately - no wait token consumed. runs.poll()
-    // is a plain status-check loop, safe to run concurrently with any
-    // number of other in-flight polls (crop or gemini) elsewhere in the graph.
     const handle = await cropImageTask.trigger(payload);
     const result = await runs.poll(handle.id, { pollIntervalMs: 1000 });
 

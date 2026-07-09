@@ -16,13 +16,6 @@ export async function POST(req: NextRequest) {
     const { cropImageTask } = await import("@/trigger/crop-image");
     const { runs } = await import("@trigger.dev/sdk/v3");
 
-    // IMPORTANT: triggerAndWait() only works when called from *inside*
-    // another running task - it relies on a waitpoint tied to the current
-    // run's execution context. An API route has no such context, so calling
-    // it here throws immediately. That's why this per-node "Run" button was
-    // failing while the full/orchestrated run (which calls triggerAndWait
-    // from inside orchestratorTask) worked fine. Trigger standalone instead,
-    // then poll for the result.
     const handle = await cropImageTask.trigger(parsed.data);
     const run = await runs.poll(handle.id, { pollIntervalMs: 2000 });
 

@@ -12,15 +12,6 @@ const NODE_COLORS: Record<string, string> = {
   sticky_note: "#a78bfa",
 };
 
-/**
- * Bottom-right minimap. Collapsed by default (a single map-icon button);
- * clicking it expands into a dark minimap panel with a small collapse
- * button. React Flow's own maskColor keeps the currently-visible viewport
- * clear while dulling everything outside it.
- *
- * Slides left in sync with the history panel opening, same as the bottom
- * toolbar, so it never gets covered.
- */
 export function MinimapToggle({ historyOpen }: { historyOpen?: boolean }) {
   const [expanded, setExpanded] = useState(false);
 

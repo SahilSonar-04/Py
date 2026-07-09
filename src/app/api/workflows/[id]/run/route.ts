@@ -39,18 +39,8 @@ export async function POST(
   await prisma.workflow.update({ where: { id: workflowId }, data: { status: "running" } });
 
   try {
-    // Dynamic import keeps trigger.dev SDK out of the edge bundle until needed
     const { orchestratorTask } = await import("@/trigger/orchestrator");
     const { runs } = await import("@trigger.dev/sdk/v3");
-
-    // IMPORTANT: triggerAndWait() can only be called from inside another
-    // task's run() function - calling it here (a plain API route) throws
-    // "triggerAndWait can only be used from inside a task.run()" before the
-    // orchestrator ever starts, which is why no NodeExecution rows existed.
-    //
-    // The correct way to wait on a task from outside a task context is to
-    // trigger() it (returns immediately with a handle) and then poll its
-    // status with runs.poll() until it reaches a terminal state.
     const handle = await orchestratorTask.trigger({
       runId: run.id,
       nodes: graph.nodes,
@@ -86,13 +76,6 @@ export async function POST(
   return NextResponse.json({ runId: run.id }, { status: 202 });
 }
 
-/**
- * Marks the run as FAILED and, if no NodeExecution rows exist yet (meaning
- * the orchestrator never actually started executing nodes), writes a
- * synthetic "orchestrator" entry carrying the failure reason so it's visible
- * in the history panel instead of silently showing "No node executions
- * recorded."
- */
 async function markRunFailed(runId: string, workflowId: string, errorMessage: string) {
   const existingCount = await prisma.nodeExecution.count({ where: { runId } });
 

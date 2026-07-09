@@ -1,4 +1,3 @@
-// src/lib/sample-workflow.ts
 import { nanoid } from "nanoid";
 import type {
   CropImageData,
@@ -167,9 +166,6 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     data: {
       label: "Response",
       locked: true,
-      // Intentionally empty - the Response node derives its displayed rows
-      // live from whichever edges actually target its "result" handle, so
-      // nothing needs to be pre-seeded here.
       slots: [],
     } satisfies ResponseData,
   };
@@ -183,13 +179,6 @@ export function sampleWorkflowGraph(): WorkflowGraph {
     edge(crop1Id, "output_image", gemini3Id, "image", "image"),
     edge(crop2Id, "output_image", gemini3Id, "image", "image"),
     edge(gemini3Id, "response", responseId, "result", "any"),
-    // Per spec row 7: Response collects BOTH Final Gemini's text output
-    // AND Crop Image #2's cropped image directly - this was previously
-    // missing, leaving Response wired to only one of the two required
-    // sources. Response's "result" handle allows multiple connections
-    // (see isConnectionValid's allowsMulti check for "image"/"any" types
-    // in canvas-store.ts), so this is additive alongside the edge above,
-    // not a replacement for it.
     edge(crop2Id, "output_image", responseId, "result", "image"),
   ];
 

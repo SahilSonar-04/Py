@@ -19,9 +19,6 @@ export function TopRightControls({
   async function runWorkflow(scope: "FULL" | "PARTIAL" | "SINGLE") {
     if (busy) return;
 
-    // Explicit confirmation for scoped runs, so a stale/accidental selection
-    // can never silently produce a partial run again — this is the second
-    // layer of defense on top of clearSelection() below.
     if (scope !== "FULL") {
       const label = scope === "SINGLE" ? "1 node" : `${selectedNodeIds.length} nodes`;
       const ok = window.confirm(
@@ -36,9 +33,6 @@ export function TopRightControls({
       const targetNodeIds =
         scope === "FULL" ? undefined : selectedNodeIds.length > 0 ? selectedNodeIds : undefined;
 
-      // Capture-then-clear: scope for *this* run is already computed above,
-      // so it's safe to clear canvas selection now. This is what prevents
-      // the next Run click from silently inheriting this same scope.
       clearSelection();
 
       await fetch(`/api/workflows/${workflowId}/run`, {

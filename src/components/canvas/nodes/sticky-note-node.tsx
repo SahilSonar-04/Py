@@ -32,8 +32,6 @@ export function StickyNoteNode({ id, data, selected }: NodeProps<StickyNoteData>
 
   const fontSize = data.fontSize ?? 14;
 
-  // The textarea doesn't exist in the DOM until isEditing flips true, so we
-  // focus it in an effect rather than directly in the double-click handler.
   useEffect(() => {
     if (!isEditing) return;
     const el = textareaRef.current;
@@ -143,8 +141,6 @@ export function StickyNoteNode({ id, data, selected }: NodeProps<StickyNoteData>
                 e.preventDefault();
                 setIsEditing(false);
               }
-              // Stop Delete/Backspace (and everything else) from bubbling up
-              // to the canvas's "delete selected node" global shortcut while typing.
               e.stopPropagation();
             }}
           />

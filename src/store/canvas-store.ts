@@ -1,4 +1,3 @@
-// src/store/canvas-store.ts
 import { create } from "zustand";
 import {
   applyNodeChanges,
@@ -64,13 +63,6 @@ interface CanvasState {
   removeRequestField: (fieldId: string) => void;
   setNodeStatus: (nodeId: string, status: ExecStatus) => void;
 
-  /**
-   * "Add to Request" behavior: finds an existing, unconnected Request-Inputs
-   * field of the right type (reusing it rather than spawning duplicates on
-   * repeat clicks), or creates one if none exists, then wires an edge from
-   * it into the given node/handle. Only supports "text" | "image" | "number"
-   * since those are the field types Request-Inputs actually has.
-   */
   addFieldAndConnect: (
     targetNodeId: string,
     targetHandle: string,
@@ -301,9 +293,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     const requestData = requestNode.data as RequestInputsData;
 
-    // Fields already wired to *something* are considered "spoken for" -
-    // repeat clicks reuse the first matching field that isn't, rather than
-    // spawning a new field every time.
     const connectedFieldIds = new Set(
       edges.filter((e) => e.source === REQUEST_NODE_ID).map((e) => e.sourceHandle)
     );

@@ -53,8 +53,6 @@ export function parseWorkflowImport(raw: string): {
   }
 
   const obj = json as Record<string, unknown>;
-  // Accepts either our own export shape ({ name, graph: { nodes, edges } })
-  // or a bare { nodes, edges } graph.
   const graph = (obj.graph && typeof obj.graph === "object" ? obj.graph : obj) as Record<
     string,
     unknown
@@ -82,10 +80,6 @@ export function parseWorkflowImport(raw: string): {
   };
 }
 
-/**
- * Defensive fallback: the rest of the app assumes request-inputs/response
- * always exist. Re-adds them if an imported file somehow dropped one.
- */
 export function ensureLockedNodesPresent(nodes: PyNode[]): PyNode[] {
   const hasRequest = nodes.some((n) => n.id === "request-inputs");
   const hasResponse = nodes.some((n) => n.id === "response");

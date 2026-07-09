@@ -28,8 +28,6 @@ function filterLabel(f: StatusFilter) {
   return f === "All" ? "All" : f[0] + f.slice(1).toLowerCase();
 }
 
-/** Renders any input/output value fully — pretty-printed JSON for objects/arrays,
- * plain text for strings — so nothing is silently truncated in the history panel. */
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "string") return value;

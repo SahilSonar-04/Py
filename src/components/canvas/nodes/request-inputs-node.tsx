@@ -142,9 +142,7 @@ export function RequestInputsNode({ id, data, selected }: NodeProps<RequestInput
               <ImageFieldUpload value={field.value} onChange={(v) => setFieldValue(field.id, v)} />
             )}
 
-            {/* Anchored to 50% of THIS field's own height, so it stays
-                correctly centered no matter how tall the content below
-                (e.g. an image preview) makes the row. */}
+            {}
             <div
               className="pointer-events-none absolute flex items-center"
               style={{ right: -21, top: "50%", transform: "translateY(-50%)" }}

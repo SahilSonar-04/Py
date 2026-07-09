@@ -295,7 +295,7 @@ export function NodePicker({
           </div>
         </div>
 
-        {/* Right flyout: children of the active drill-down item (e.g. LLM Call's model list) */}
+        {}
         {!searching && activeItem?.children && (
           <div className="w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white/95 shadow-2xl backdrop-blur">
             <div className="border-b border-gray-100 px-4 py-3 text-sm font-medium text-gray-900">

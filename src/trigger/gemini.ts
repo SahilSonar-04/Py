@@ -74,17 +74,6 @@ export const geminiTask = task({
 });
 
 function mapModelName(modelId: string): string {
-  // "gemini-3.1-pro" is the UI label used to match the Galaxy.ai reference
-  // design - it is not a real callable API model ID (confirmed via 404).
-  //
-  // gemini-2.5-pro IS a real model ID, but on this key/project Google
-  // returned a 429 with "limit: 0" for its free tier - i.e. zero free
-  // quota allocated, a billing/account-tier restriction rather than a code
-  // problem. gemini-2.5-flash (and gemini-2.0-flash) are the models Google
-  // typically grants real free-tier quota to, so default everything there.
-  //
-  // If you later enable billing and want Pro-quality output, change the
-  // right-hand side back to "gemini-2.5-pro".
   const map: Record<string, string> = {
     "gemini-2.5-flash": "gemini-2.5-flash",
     "gemini-2.5-pro": "gemini-2.5-pro",

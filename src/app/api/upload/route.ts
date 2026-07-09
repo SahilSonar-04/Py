@@ -1,4 +1,3 @@
-// src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { mkdir, readdir, writeFile } from "fs/promises";
@@ -57,11 +56,7 @@ async function handleLocalUpload(file: File) {
  * (assembly.uploads[]).
  *
  * Trade-off: these URLs expire ~24h after upload (Transloadit's own
- * documented limit for un-exported files). Fine for a demo/take-home;
- * NOT meant for real production traffic. If this ever needs to be
- * permanent, add an export Step (/s3/store, /cloudflare/store,
- * /backblaze/store, etc.) pointed at storage of your choice - that's
- * the only thing that changes, this route stays the same shape.
+ * documented limit for un-exported files). 
  */
 async function handleTransloaditUpload(file: File) {
   const authKey = process.env.TRANSLOADIT_AUTH_KEY;
@@ -107,9 +102,6 @@ async function handleTransloaditUpload(file: File) {
     return NextResponse.json({ error: assembly.message ?? assembly.error }, { status: 500 });
   }
 
-  // The file is sent synchronously as part of this POST, so it's usually
-  // already present in `uploads` by the time we get a response. Poll a
-  // few times regardless, in case the assembly is briefly still uploading.
   const statusUrl = assembly.assembly_ssl_url as string;
   for (let i = 0; i < 15 && (!assembly.uploads || assembly.uploads.length === 0); i++) {
     if (assembly.ok === "ASSEMBLY_ERROR") break;
@@ -135,8 +127,6 @@ export async function GET() {
 
   const useLocalFallback = process.env.USE_LOCAL_UPLOAD_FALLBACK === "true";
   if (!useLocalFallback) {
-    // Transloadit uploads aren't tracked anywhere yet, so the asset picker
-    // only lists local files today.
     return NextResponse.json({ urls: [] });
   }
 
