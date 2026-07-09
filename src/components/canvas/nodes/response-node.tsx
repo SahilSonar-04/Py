@@ -9,6 +9,9 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { labelForResponseSource } from "@/lib/response-label";
 import type { ResponseData } from "@/types/workflow";
 
+const VALUE_COLLAPSED_MAX_HEIGHT = 160;
+const VALUE_READ_MORE_THRESHOLD = 300;
+
 export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
   const edges = useCanvasStore((s) => s.edges);
   const nodes = useCanvasStore((s) => s.nodes);
@@ -150,13 +153,7 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
                       </>
                     )}
                   </div>
-                  <div className="nodrag nowheel selectable-text cursor-text select-text max-h-40 overflow-y-auto rounded border border-gray-200 bg-white px-2 py-2">
-                    {row.value ? (
-                      <MarkdownText text={String(row.value)} className="text-xs text-gray-700" />
-                    ) : (
-                      <span className="block text-xs text-gray-700">No output yet</span>
-                    )}
-                  </div>
+                  <ResponseValueBox value={row.value} />
                 </div>
               );
             })}
@@ -164,6 +161,41 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
         )}
       </div>
     </div>
+  );
+}
+
+function ResponseValueBox({ value }: { value?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const showReadMoreToggle = (value?.length ?? 0) > VALUE_READ_MORE_THRESHOLD;
+
+  return (
+    <>
+      <div
+        className="nodrag nowheel selectable-text cursor-text select-text rounded border border-gray-200 bg-white px-2 py-2"
+        style={
+          !expanded
+            ? { maxHeight: VALUE_COLLAPSED_MAX_HEIGHT, overflowY: "auto" }
+            : undefined
+        }
+      >
+        {value ? (
+          <MarkdownText text={String(value)} className="text-xs text-gray-700" />
+        ) : (
+          <span className="block text-xs text-gray-700">No output yet</span>
+        )}
+      </div>
+      {showReadMoreToggle && (
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="nodrag text-[10px] font-medium text-workflow-accent-600 hover:underline"
+          >
+            {expanded ? "Read less" : "Read more"}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

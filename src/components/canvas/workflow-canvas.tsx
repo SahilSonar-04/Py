@@ -266,6 +266,10 @@ function CanvasInner({
       }
 
       if (meta && e.key.toLowerCase() === "c") {
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) {
+          return;
+        }
         e.preventDefault();
         const { nodes: currentNodes, selectedNodeIds: selected } = useCanvasStore.getState();
         clipboardRef.current = currentNodes

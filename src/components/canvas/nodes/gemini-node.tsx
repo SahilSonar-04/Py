@@ -23,6 +23,9 @@ import { MarkdownText } from "./markdown-text";
 import { useCanvasStore } from "@/store/canvas-store";
 import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
 
+const RESPONSE_COLLAPSED_MAX_HEIGHT = 160;
+const RESPONSE_READ_MORE_THRESHOLD = 300;
+
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const addFieldAndConnect = useCanvasStore((s) => s.addFieldAndConnect);
@@ -43,6 +46,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
 
   const [uploading, setUploading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [responseExpanded, setResponseExpanded] = useState(false);
 
   function set<K extends keyof GeminiData>(key: K, value: GeminiData[K]) {
     updateNodeData(id, { [key]: value });
@@ -110,6 +114,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
 
   const isRunning = data.status === "running";
   const isSkipped = data.status === "skipped";
+  const showReadMoreToggle = (data.response?.length ?? 0) > RESPONSE_READ_MORE_THRESHOLD;
 
   return (
     <div
@@ -335,7 +340,14 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
               <span className="text-xs text-gray-500">Response</span>
               <CopyButton value={data.response} />
             </div>
-            <div className="nodrag nowheel selectable-text cursor-text select-text min-h-[84px] rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div
+              className="nodrag nowheel selectable-text cursor-text select-text min-h-[84px] rounded-lg border border-gray-200 bg-gray-50 p-3"
+              style={
+                !responseExpanded
+                  ? { maxHeight: RESPONSE_COLLAPSED_MAX_HEIGHT, overflowY: "auto" }
+                  : undefined
+              }
+            >
               {data.response ? (
                 <MarkdownText text={data.response} className="text-xs text-gray-800" />
               ) : (
@@ -348,6 +360,17 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
                 </div>
               )}
             </div>
+            {showReadMoreToggle && (
+              <div className="mt-1.5 text-right">
+                <button
+                  type="button"
+                  onClick={() => setResponseExpanded((v) => !v)}
+                  className="nodrag text-[10px] font-medium text-workflow-accent-600 hover:underline"
+                >
+                  {responseExpanded ? "Read less" : "Read more"}
+                </button>
+              </div>
+            )}
             {data.error && <p className="mt-1 text-[10px] text-red-500">{data.error}</p>}
 
             <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-gray-400">
