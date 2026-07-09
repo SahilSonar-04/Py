@@ -21,6 +21,7 @@ import { HistoryPanel } from "./history-panel";
 import { MinimapToggle } from "./minimap-toggle";
 import { BottomLeftControls, useAutoArrange } from "./bottom-left-controls";
 import { KeyboardShortcutsModal } from "./keyboard-shortcuts-modal";
+import { NodePicker } from "./node-picker";
 import { nanoid } from "nanoid";
 import type {
   NodeExecutionView,
@@ -39,16 +40,6 @@ type ConnectingInfo = {
   handleType: "source" | "target";
 };
 
-/**
- * Applies a run's NodeExecution rows onto the canvas store - node status
- * (idle/running/success/failed) plus any output payload (crop output image,
- * gemini response text, response-node slots).
- *
- * This is a plain function (not a hook) that reads store actions via
- * getState() so it can be called both from the live-poll effect AND from
- * the one-off mount-time reconciliation effect below, without either one
- * needing to depend on the other.
- */
 function applyRunExecutionsToStore(nodeExecutions: NodeExecutionView[]) {
   const { setNodeStatus, updateNodeData } = useCanvasStore.getState();
 
@@ -73,13 +64,7 @@ function applyRunExecutionsToStore(nodeExecutions: NodeExecutionView[]) {
       } else if (exec.nodeType === "gemini" && typeof output.response === "string") {
         updateNodeData(exec.nodeId, { response: output.response, error: undefined });
       } else if (exec.nodeType === "response") {
-        // The Response node renders from `data.slots[]`, keyed by edge id
-        // (unique per connection). The orchestrator's output for this node
-        // type is a map of edgeId -> { label, value } - see
-        // src/trigger/orchestrator.ts's executeInlineNode for why edgeId is
-        // used instead of targetHandle (every edge into Response shares the
-        // same "result" targetHandle, so targetHandle alone can't
-        // distinguish multiple simultaneous connections).
+
         const currentNode = useCanvasStore.getState().nodes.find((n) => n.id === exec.nodeId);
         const currentSlots: ResponseSlot[] =
           currentNode && currentNode.type === "response"
@@ -173,10 +158,14 @@ function CanvasInner({
   const [selectMode, setSelectMode] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [connectionInvalid, setConnectionInvalid] = useState(false);
+  const [contextPicker, setContextPicker] = useState<{
+    anchor: { x: number; y: number };
+    spawnAt: { x: number; y: number };
+  } | null>(null);
   const initialized = useRef(false);
   const connectingRef = useRef<ConnectingInfo | null>(null);
   const clipboardRef = useRef<PyNode[]>([]);
-  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
   const handleAutoArrange = useAutoArrange();
 
   useEffect(() => {
@@ -185,13 +174,6 @@ function CanvasInner({
     setWorkflow(workflowId, initialName, initialNodes, initialEdges);
   }, [workflowId, initialName, initialNodes, initialEdges, setWorkflow]);
 
-  // --- Reconcile with the latest run on mount ---
-  // Runs once per workflowId, independent of the local `isRunning` flag
-  // (which lives only in memory and is lost on reload/navigation/HMR).
-  // Without this, a run that finishes while nobody is actively polling
-  // (or whose poll loop got interrupted) leaves the canvas frozen on
-  // stale data forever, even though the History panel - which always
-  // re-fetches fresh from the DB - shows the correct final result.
   useEffect(() => {
     let cancelled = false;
 
@@ -205,9 +187,7 @@ function CanvasInner({
 
         applyRunExecutionsToStore(latestRun.nodeExecutions);
 
-        // If the most recent run is still in flight, resume live polling
-        // (the effect below) instead of leaving the canvas stuck on
-        // whatever partial state we just reconciled.
+
         if (!isTerminalRunStatus(latestRun.status)) {
           setRunning(true);
         }
@@ -239,8 +219,6 @@ function CanvasInner({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const isTyping = ["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName);
-
-      // Shortcuts modal: Escape closes it and takes priority over deselect.
       if (shortcutsOpen) {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -355,6 +333,22 @@ function CanvasInner({
       setSelectedNodeIds(selected.map((n) => n.id));
     },
     [setSelectedNodeIds]
+  );
+
+  function isTextEditable(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+  }
+
+  const onWorkspaceContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      if (isTextEditable(event.target)) return;
+      event.preventDefault();
+      const anchor = { x: event.clientX, y: event.clientY };
+      const spawnAt = screenToFlowPosition(anchor);
+      setContextPicker({ anchor, spawnAt });
+    },
+    [screenToFlowPosition]
   );
 
   // --- Edge hover (for the delete × button) ---
@@ -494,6 +488,10 @@ function CanvasInner({
         onConnectEnd={onConnectEnd}
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
+        onPaneContextMenu={onWorkspaceContextMenu}
+        onNodeContextMenu={onWorkspaceContextMenu}
+        onEdgeContextMenu={onWorkspaceContextMenu}
+        onSelectionContextMenu={onWorkspaceContextMenu}
         isValidConnection={isValidConnectionFn}
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
@@ -529,6 +527,13 @@ function CanvasInner({
       <MinimapToggle historyOpen={historyOpen} />
       <HistoryPanel workflowId={workflowId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
       {shortcutsOpen && <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+      {contextPicker && (
+        <NodePicker
+          anchor={contextPicker.anchor}
+          spawnAt={contextPicker.spawnAt}
+          onClose={() => setContextPicker(null)}
+        />
+      )}
     </div>
   );
 }

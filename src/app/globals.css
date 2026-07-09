@@ -99,10 +99,7 @@ body {
   animation: node-pulse-glow 1.6s ease-in-out infinite;
   border-color: var(--workflow-accent-500);
 }
-/* Static (non-pulsing) treatment for nodes that were skip-passed-through
-   because they were outside the selected run's scope. Dashed border keeps
-   it visually distinct from both "idle" (solid gray) and "running" (pulsing
-   indigo glow), so a 0.0s duration never reads as "ran fine." */
+
 .node-skipped {
   border-style: dashed;
   border-color: #d1d5db;
@@ -127,16 +124,11 @@ body {
   scrollbar-width: none;
 }
 
-/* Persistent hover ring on node cards (same treatment as selection) */
+
 .node-card:hover {
   box-shadow: 0 0 0 2px var(--workflow-accent-500), 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
-/* Soft halo behind each handle, revealed on node hover. Sized close to the
-   14px dot itself (28px, ~2x) so it reads as a subtle glow rather than an
-   oversized, off-center blob — adjacent handles' halos still overlap
-   slightly, which is what creates the "connected glow" line running down
-   the node's edge in the reference UI. */
 .handle-halo {
   position: absolute;
   top: 50%;
@@ -160,4 +152,11 @@ button:not(:disabled) {
 
 .react-flow__handle {
   cursor: pointer !important;
+}
+
+.react-flow__node input,
+.react-flow__node textarea,
+.react-flow__node select,
+.react-flow__node [contenteditable="true"] {
+  cursor: text;
 }
