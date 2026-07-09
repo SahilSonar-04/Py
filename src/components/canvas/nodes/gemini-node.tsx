@@ -19,6 +19,7 @@ import { InfoTooltip } from "./info-tooltip";
 import { NodeOptionsMenu } from "./node-options-menu";
 import { useCanvasStore } from "@/store/canvas-store";
 import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
+import { MarkdownText } from "./markdown-text";
 
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
@@ -338,7 +339,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
             <div className="mb-1.5 text-xs text-gray-500">Response</div>
             <div className="min-h-[84px] rounded-lg border border-gray-200 bg-gray-50 p-3">
               {data.response ? (
-                <p className="whitespace-pre-wrap text-xs text-gray-800">{data.response}</p>
+                <MarkdownText text={data.response} className="text-xs text-gray-800" />
               ) : (
                 <div className="py-6 text-center text-xs text-gray-400">
                   {isRunning

@@ -7,6 +7,7 @@ import { TypedHandle } from "./typed-handle";
 import { useCanvasStore } from "@/store/canvas-store";
 import { labelForResponseSource } from "@/lib/response-label";
 import type { ResponseData } from "@/types/workflow";
+import { MarkdownText } from "./markdown-text";
 
 export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
   const edges = useCanvasStore((s) => s.edges);
@@ -149,9 +150,11 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
                     )}
                   </div>
                   <div className="nodrag nowheel max-h-40 overflow-y-auto rounded border border-gray-200 bg-white px-2 py-2">
-                    <span className="block whitespace-pre-wrap break-words text-xs text-gray-700">
-                      {row.value ? String(row.value) : "No output yet"}
-                    </span>
+                    {row.value ? (
+                      <MarkdownText text={String(row.value)} className="text-xs text-gray-700" />
+                    ) : (
+                      <span className="block text-xs text-gray-700">No output yet</span>
+                    )}
                   </div>
                 </div>
               );
