@@ -1,6 +1,6 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
-import { ffmpeg } from "@trigger.dev/build/extensions/core";
+import { aptGet } from "@trigger.dev/build/extensions/core";
 
 export default defineConfig({
   project: "proj_cxnpprlinngvttlkvwgr", 
@@ -26,7 +26,7 @@ export default defineConfig({
         schema: "prisma/schema.prisma",
         directUrlEnvVarName: "DATABASE_URL",
       }),
-      ffmpeg({ version: "7" }),
+      aptGet({ packages: ["ffmpeg"] }),
     ],
   },
 });
