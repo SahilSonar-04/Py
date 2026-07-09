@@ -1,6 +1,14 @@
 import { task, wait } from "@trigger.dev/sdk/v3";
-import sharp from "sharp";
+import ffmpeg from "fluent-ffmpeg";
+import { promises as fs } from "fs";
+import os from "os";
+import path from "path";
+import { randomUUID } from "crypto";
 import { uploadBufferToTransloadit } from "@/lib/transloadit";
+
+
+if (process.env.FFMPEG_PATH) ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH);
+if (process.env.FFPROBE_PATH) ffmpeg.setFfprobePath(process.env.FFPROBE_PATH);
 
 export interface CropImagePayload {
   inputImageUrl: string;
@@ -14,56 +22,49 @@ export interface CropImageResult {
   outputImageUrl: string;
 }
 
-/**
- * MANDATORY per spec: this task must await at least 30 seconds before returning,
- * to simulate a realistic FFmpeg-via-Trigger.dev processing delay.
- *
- * Implementation note: actual cropping is done with `sharp` (fast, deterministic,
- * percentage-based crop box) rather than shelling out to ffmpeg directly, since the
- * cropping operation itself is instant - the 30s wait is the explicit hard
- * requirement being satisfied here, not a simulation of real processing time.
- *
- * IMPORTANT: this task runs on Trigger.dev's cloud infrastructure, which does
- * NOT share a filesystem with Vercel or your local dev machine. It can only
- * read input images via http(s) fetch, and must store its output via a real
- * remote store (Transloadit here) rather than writing to local disk - a
- * previous version of this task wrote to `public/uploads` locally, which
- * worked in local dev (same filesystem) but throws ENOENT / produces
- * unreachable files once deployed.
- */
 export const cropImageTask = task({
   id: "crop-image",
   maxDuration: 120,
   run: async (payload: CropImagePayload): Promise<CropImageResult> => {
     const { inputImageUrl, x, y, width, height } = payload;
 
-    const inputBuffer = await fetchImageBuffer(inputImageUrl);
-    const image = sharp(inputBuffer);
-    const metadata = await image.metadata();
+    const runId = randomUUID();
+    const inputPath = path.join(os.tmpdir(), `crop-in-${runId}`);
+    const outputPath = path.join(os.tmpdir(), `crop-out-${runId}.png`);
 
-    const imgWidth = metadata.width ?? 1000;
-    const imgHeight = metadata.height ?? 1000;
+    try {
+      const inputBuffer = await fetchImageBuffer(inputImageUrl);
+      await fs.writeFile(inputPath, inputBuffer);
 
-    const left = Math.round((x / 100) * imgWidth);
-    const top = Math.round((y / 100) * imgHeight);
-    const cropWidth = Math.max(1, Math.round((width / 100) * imgWidth));
-    const cropHeight = Math.max(1, Math.round((height / 100) * imgHeight));
+      const { width: imgWidth, height: imgHeight } = await probeDimensions(inputPath);
 
-    const safeWidth = Math.min(cropWidth, imgWidth - left);
-    const safeHeight = Math.min(cropHeight, imgHeight - top);
+      const left = Math.round((x / 100) * imgWidth);
+      const top = Math.round((y / 100) * imgHeight);
+      const cropWidth = Math.max(1, Math.round((width / 100) * imgWidth));
+      const cropHeight = Math.max(1, Math.round((height / 100) * imgHeight));
 
-    const croppedBuffer = await image
-      .extract({ left, top, width: safeWidth, height: safeHeight })
-      .png()
-      .toBuffer();
+      const safeWidth = Math.max(1, Math.min(cropWidth, imgWidth - left));
+      const safeHeight = Math.max(1, Math.min(cropHeight, imgHeight - top));
 
-    // --- MANDATORY 30+ second artificial delay (hard requirement, do not skip) ---
-    await wait.for({ seconds: 31 });
+      await runFfmpegCrop(inputPath, outputPath, {
+        left,
+        top,
+        width: safeWidth,
+        height: safeHeight,
+      });
 
-    const filename = `crop-${Date.now()}.png`;
-    const outputImageUrl = await uploadBufferToTransloadit(croppedBuffer, filename, "image/png");
+      // --- MANDATORY 30+ second artificial delay (hard requirement, do not skip) ---
+      await wait.for({ seconds: 31 });
 
-    return { outputImageUrl };
+      const croppedBuffer = await fs.readFile(outputPath);
+      const filename = `crop-${Date.now()}.png`;
+      const outputImageUrl = await uploadBufferToTransloadit(croppedBuffer, filename, "image/png");
+
+      return { outputImageUrl };
+    } finally {
+      await fs.rm(inputPath, { force: true });
+      await fs.rm(outputPath, { force: true });
+    }
   },
 });
 
@@ -82,4 +83,37 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
   if (!res.ok) throw new Error(`Failed to fetch input image: ${res.status}`);
   const arrayBuffer = await res.arrayBuffer();
   return Buffer.from(arrayBuffer);
+}
+
+function probeDimensions(filePath: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, data) => {
+      if (err) return reject(new Error(`ffprobe failed: ${err.message}`));
+
+      const stream = data.streams.find(
+        (s) => s.codec_type === "video" && s.width && s.height
+      );
+
+      if (!stream?.width || !stream?.height) {
+        return reject(new Error("ffprobe did not report image dimensions"));
+      }
+
+      resolve({ width: stream.width, height: stream.height });
+    });
+  });
+}
+
+function runFfmpegCrop(
+  inputPath: string,
+  outputPath: string,
+  box: { left: number; top: number; width: number; height: number }
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .videoFilters(`crop=${box.width}:${box.height}:${box.left}:${box.top}`)
+      .outputOptions(["-frames:v 1"])
+      .on("error", (err) => reject(new Error(`ffmpeg crop failed: ${err.message}`)))
+      .on("end", () => resolve())
+      .save(outputPath);
+  });
 }
