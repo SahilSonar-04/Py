@@ -13,13 +13,15 @@ import {
   Coins,
   Plus,
   Info,
+  Copy,
+  Check,
 } from "lucide-react";
 import { TypedHandle } from "./typed-handle";
 import { InfoTooltip } from "./info-tooltip";
 import { NodeOptionsMenu } from "./node-options-menu";
+import { MarkdownText } from "./markdown-text";
 import { useCanvasStore } from "@/store/canvas-store";
 import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
-import { MarkdownText } from "./markdown-text";
 
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
@@ -116,7 +118,6 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
       } ${selected ? "node-locked-ring" : ""}`}
       style={{ overflow: "visible" }}
     >
-      {/* Header - mirrors Crop Image's header layout exactly */}
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <div className="flex min-w-0 items-center gap-1.5">
           <select
@@ -178,7 +179,6 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
       </div>
 
       <div className="space-y-4 px-4 py-4" style={{ overflow: "visible" }}>
-        {/* Prompt */}
         <div className="relative" style={{ overflow: "visible" }}>
           <div className="absolute flex items-center" style={{ left: -22, top: 8 }}>
             <TypedHandle type="target" position={Position.Left} id="prompt" dataType="text" />
@@ -211,7 +211,6 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           />
         </div>
 
-        {/* System Prompt */}
         <div className="relative" style={{ overflow: "visible" }}>
           <div className="absolute flex items-center" style={{ left: -22, top: 14 }}>
             <TypedHandle type="target" position={Position.Left} id="system_prompt" dataType="text" />
@@ -244,7 +243,6 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           />
         </div>
 
-        {/* Image (Vision) - accepts multiple connections */}
         <div className="relative" style={{ overflow: "visible" }}>
           <div className="absolute flex items-center" style={{ left: -22, top: 12 }}>
             <TypedHandle type="target" position={Position.Left} id="image" dataType="image" />
@@ -307,12 +305,10 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           </div>
         </div>
 
-        {/* Video / Audio / File */}
         <UploadStyleUrlField id="video" label="Video" dataType="video" value={data.videoUrl} onChange={(v) => set("videoUrl", v)} />
         <UploadStyleUrlField id="audio" label="Audio" dataType="audio" value={data.audioUrl} onChange={(v) => set("audioUrl", v)} />
         <UploadStyleUrlField id="file" label="File" dataType="file" value={data.fileUrl} onChange={(v) => set("fileUrl", v)} />
 
-        {/* Settings (collapsed) */}
         <div>
           <button
             onClick={() => set("settingsOpen", !data.settingsOpen)}
@@ -330,14 +326,16 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           )}
         </div>
 
-        {/* Output */}
         <div className="mt-4 border-t border-gray-100 pt-4">
           <div className="relative" style={{ overflow: "visible" }}>
             <div className="absolute flex items-center" style={{ right: -22, top: 8 }}>
               <TypedHandle type="source" position={Position.Right} id="response" dataType="text" />
             </div>
-            <div className="mb-1.5 text-xs text-gray-500">Response</div>
-            <div className="min-h-[84px] rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-gray-500">Response</span>
+              <CopyButton value={data.response} />
+            </div>
+            <div className="nodrag nowheel selectable-text cursor-text select-text min-h-[84px] rounded-lg border border-gray-200 bg-gray-50 p-3">
               {data.response ? (
                 <MarkdownText text={data.response} className="text-xs text-gray-800" />
               ) : (
@@ -360,6 +358,35 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CopyButton({ value }: { value?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      disabled={!value}
+      title={copied ? "Copied!" : "Copy to clipboard"}
+      className={`nodrag rounded p-1 transition-colors ${
+        copied ? "text-green-600" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+      } disabled:cursor-not-allowed disabled:opacity-30`}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 

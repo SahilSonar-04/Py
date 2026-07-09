@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { Position, type NodeProps } from "reactflow";
-import { FileOutput, Info, Pencil, Trash2, Check, X } from "lucide-react";
+import { FileOutput, Info, Pencil, Trash2, Check, X, Copy } from "lucide-react";
 import { TypedHandle } from "./typed-handle";
+import { MarkdownText } from "./markdown-text";
 import { useCanvasStore } from "@/store/canvas-store";
 import { labelForResponseSource } from "@/lib/response-label";
 import type { ResponseData } from "@/types/workflow";
-import { MarkdownText } from "./markdown-text";
 
 export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
   const edges = useCanvasStore((s) => s.edges);
@@ -132,12 +132,13 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
                         >
                           {row.displayLabel}
                         </span>
+                        <CopyButton value={row.value} />
                         <button
                           onClick={() => startEditing(row.edgeId, row.displayLabel)}
                           className="nodrag rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
                           title="Rename"
                         >
-                          <Pencil className="h-3 w-3" />
+                          <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => handleDisconnect(row.edgeId)}
@@ -149,7 +150,7 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
                       </>
                     )}
                   </div>
-                  <div className="nodrag nowheel max-h-40 overflow-y-auto rounded border border-gray-200 bg-white px-2 py-2">
+                  <div className="nodrag nowheel selectable-text cursor-text select-text max-h-40 overflow-y-auto rounded border border-gray-200 bg-white px-2 py-2">
                     {row.value ? (
                       <MarkdownText text={String(row.value)} className="text-xs text-gray-700" />
                     ) : (
@@ -163,5 +164,34 @@ export function ResponseNode({ id, data, selected }: NodeProps<ResponseData>) {
         )}
       </div>
     </div>
+  );
+}
+
+function CopyButton({ value }: { value?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      disabled={!value}
+      title={copied ? "Copied!" : "Copy to clipboard"}
+      className={`nodrag rounded p-1 transition-colors ${
+        copied ? "text-green-600" : "text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+      } disabled:cursor-not-allowed disabled:opacity-30`}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }

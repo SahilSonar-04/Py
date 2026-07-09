@@ -125,6 +125,14 @@ export function WorkflowCanvas({
   );
 }
 
+function isTextEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+    return true;
+  }
+  return target.closest(".selectable-text") !== null;
+}
+
 function CanvasInner({
   workflowId,
   initialName,
@@ -217,7 +225,9 @@ function CanvasInner({
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const isTyping = ["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName);
+      const target = e.target as HTMLElement | null;
+      const isTyping = isTextEditable(target);
+
       if (shortcutsOpen) {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -333,11 +343,6 @@ function CanvasInner({
     },
     [setSelectedNodeIds]
   );
-
-  function isTextEditable(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) return false;
-    return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
-  }
 
   const onWorkspaceContextMenu = useCallback(
     (event: React.MouseEvent) => {
