@@ -18,7 +18,7 @@ import { InfoTooltip } from "./info-tooltip";
 import { NodeOptionsMenu } from "./node-options-menu";
 import { MarkdownText } from "./markdown-text";
 import { useCanvasStore } from "@/store/canvas-store";
-import type { AgentData, ToolCallLogEntry } from "@/types/workflow";
+import type { AgentData, KnowledgeData, ToolCallLogEntry } from "@/types/workflow";
 
 const AVAILABLE_TOOLS = [
   { id: "search_web", label: "Web Search", description: "Search the web for current info" },
@@ -31,6 +31,8 @@ const RESPONSE_READ_MORE_THRESHOLD = 300;
 export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const addFieldAndConnect = useCanvasStore((s) => s.addFieldAndConnect);
+  const nodes = useCanvasStore((s) => s.nodes);
+  const edges = useCanvasStore((s) => s.edges);
 
   const isLocked = useCanvasStore(
     (s) => s.nodes.find((n) => n.id === id)?.draggable === false
@@ -75,12 +77,24 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
     set("status", "running");
     set("error", undefined);
     try {
+      const knowledgeEdge = edges.find(
+        (e) => e.target === id && e.targetHandle === "knowledge_source"
+      );
+      const knowledgeSourceNode = knowledgeEdge
+        ? nodes.find((n) => n.id === knowledgeEdge.source)
+        : undefined;
+      const knowledgeSourceId =
+        knowledgeSourceNode && knowledgeSourceNode.type === "knowledge"
+          ? (knowledgeSourceNode.data as KnowledgeData).sourceId
+          : undefined;
+
       const res = await fetch("/api/nodes/agent/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: data.prompt,
           enabledTools: data.enabledTools,
+          knowledgeSourceId,
         }),
       });
       const json = await res.json();
@@ -116,7 +130,6 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
       } ${selected ? "node-locked-ring" : ""}`}
       style={{ overflow: "visible" }}
     >
-      {/* ── Header ── */}
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <div className="flex min-w-0 items-center gap-1.5">
           <Bot className="h-3.5 w-3.5 shrink-0 text-orange-500" />
@@ -170,9 +183,7 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="space-y-4 px-4 py-4" style={{ overflow: "visible" }}>
-        {/* Prompt */}
         <div className="relative" style={{ overflow: "visible" }}>
           <div className="absolute flex items-center" style={{ left: -22, top: 8 }}>
             <TypedHandle type="target" position={Position.Left} id="prompt" dataType="text" />
@@ -226,7 +237,6 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
           </div>
         </div>
 
-        {/* Tools */}
         <div className="relative" style={{ overflow: "visible" }}>
           <div className="mb-1.5 flex items-center gap-1 pl-3 text-xs text-gray-500">
             Tools
@@ -253,7 +263,6 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
           </div>
         </div>
 
-        {/* Tool Call Log */}
         {toolCalls.length > 0 && (
           <div className="relative" style={{ overflow: "visible" }}>
             <button
@@ -300,7 +309,6 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
           </div>
         )}
 
-        {/* ── Response ── */}
         <div className="mt-4 border-t border-gray-100 pt-4">
           <div className="relative" style={{ overflow: "visible" }}>
             <div className="absolute flex items-center" style={{ right: -22, top: 8 }}>
@@ -360,7 +368,6 @@ function CopyButton({ value }: { value?: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch {
-      // ignore
     }
   }
 

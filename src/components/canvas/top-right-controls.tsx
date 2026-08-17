@@ -35,6 +35,16 @@ export function TopRightControls({
 
       clearSelection();
 
+      const { nodes: latestNodes, edges: latestEdges, isDirty, markSaved } = useCanvasStore.getState();
+      if (isDirty) {
+        await fetch(`/api/workflows/${workflowId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ graph: { nodes: latestNodes, edges: latestEdges } }),
+        });
+        markSaved();
+      }
+
       await fetch(`/api/workflows/${workflowId}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

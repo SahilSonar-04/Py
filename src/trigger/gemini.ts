@@ -86,13 +86,13 @@ async function fetchImageAsBase64(url: string): Promise<{ data: string; mimeType
   let mimeType = "image/png";
 
   if (url.startsWith("/uploads/")) {
-    const path = await import("path");
-    const { readFile } = await import("fs/promises");
-    const filePath = path.join(process.cwd(), "public", url);
-    buffer = await readFile(filePath);
-    if (url.endsWith(".jpg") || url.endsWith(".jpeg")) mimeType = "image/jpeg";
-    else if (url.endsWith(".webp")) mimeType = "image/webp";
-    else if (url.endsWith(".gif")) mimeType = "image/gif";
+    throw new Error(
+      `Cannot read local path "${url}" from inside a Trigger.dev task - Trigger.dev's cloud ` +
+        `runners don't share a filesystem with Vercel or your local dev server. Make sure ` +
+        `USE_LOCAL_UPLOAD_FALLBACK=false and real TRANSLOADIT_* credentials are set (in both ` +
+        `Vercel AND the Trigger.dev dashboard's Environment Variables) so uploaded images get ` +
+        `real http(s) URLs instead of local paths.`
+    );
   } else {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch image for vision input: ${res.status}`);

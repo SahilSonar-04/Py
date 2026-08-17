@@ -21,14 +21,42 @@ import { InfoTooltip } from "./info-tooltip";
 import { NodeOptionsMenu } from "./node-options-menu";
 import { MarkdownText } from "./markdown-text";
 import { useCanvasStore } from "@/store/canvas-store";
-import { GEMINI_MODELS, type GeminiData } from "@/types/workflow";
+import {
+  GEMINI_MODELS,
+  type GeminiData,
+  type RequestInputsData,
+  type CropImageData,
+  type PyNode,
+  type PyEdge,
+} from "@/types/workflow";
 
 const RESPONSE_COLLAPSED_MAX_HEIGHT = 160;
 const RESPONSE_READ_MORE_THRESHOLD = 300;
 
+function resolveConnectedImageUrls(nodeId: string, nodes: PyNode[], edges: PyEdge[]): string[] {
+  const urls: string[] = [];
+  for (const edge of edges) {
+    if (edge.target !== nodeId || edge.targetHandle !== "image") continue;
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    if (!sourceNode) continue;
+    if (sourceNode.type === "request") {
+      const field = (sourceNode.data as RequestInputsData).fields.find(
+        (f) => f.id === edge.sourceHandle
+      );
+      if (field?.value) urls.push(field.value);
+    } else if (sourceNode.type === "crop_image") {
+      const url = (sourceNode.data as CropImageData).outputImageUrl;
+      if (url) urls.push(url);
+    }
+  }
+  return urls;
+}
+
 export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const addFieldAndConnect = useCanvasStore((s) => s.addFieldAndConnect);
+  const nodes = useCanvasStore((s) => s.nodes);
+  const edges = useCanvasStore((s) => s.edges);
 
   const isLocked = useCanvasStore(
     (s) => s.nodes.find((n) => n.id === id)?.draggable === false
@@ -82,6 +110,9 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
   async function runSingleNode() {
     set("status", "running");
     try {
+      const connectedImageUrls = resolveConnectedImageUrls(id, nodes, edges);
+      const imageUrls = Array.from(new Set([...data.imageUrls, ...connectedImageUrls]));
+
       const res = await fetch("/api/nodes/gemini/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,7 +120,7 @@ export function GeminiNode({ id, data, selected }: NodeProps<GeminiData>) {
           model: data.model,
           prompt: data.prompt,
           systemPrompt: data.systemPrompt,
-          imageUrls: data.imageUrls,
+          imageUrls,
         }),
       });
       const json = await res.json();
@@ -395,7 +426,6 @@ function CopyButton({ value }: { value?: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch {
-      // ignore
     }
   }
 
