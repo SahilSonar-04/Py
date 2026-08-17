@@ -18,11 +18,11 @@ export function chunkText(text: string, chunkSize = CHUNK_SIZE, overlap = CHUNK_
 
 async function embed(genAI: GoogleGenerativeAI, text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await model.embedContent({
+  const request = {
     content: { role: "user", parts: [{ text }] },
     outputDimensionality: 768,
-  } as any);
+  } as unknown as Parameters<typeof model.embedContent>[0];
+  const result = await model.embedContent(request);
   return result.embedding.values;
 }
 

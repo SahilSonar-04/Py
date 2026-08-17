@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Plus, Workflow as WorkflowIcon, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
@@ -20,11 +19,7 @@ interface WorkflowSummary {
 }
 
 function ClientFormattedDate({ iso }: { iso: string }) {
-  const [text, setText] = useState<string | null>(null);
-  useEffect(() => {
-    setText(new Date(iso).toLocaleString());
-  }, [iso]);
-  return <>{text ?? "—"}</>;
+  return <span suppressHydrationWarning>{new Date(iso).toLocaleString()}</span>;
 }
 
 export function DashboardClient({ initialWorkflows }: { initialWorkflows: WorkflowSummary[] }) {

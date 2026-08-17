@@ -110,7 +110,7 @@ function AssetPickerModal({
             <div className="flex flex-col items-center py-14 text-center">
               <ImageOff className="mb-3 h-8 w-8 text-gray-300" />
               <p className="text-sm font-medium text-gray-600">No images found</p>
-              <p className="text-xs text-gray-400">Uploads you've made will show up here.</p>
+              <p className="text-xs text-gray-400">Uploads you&apos;ve made will show up here.</p>
             </div>
           )}
           {urls && urls.length > 0 && (

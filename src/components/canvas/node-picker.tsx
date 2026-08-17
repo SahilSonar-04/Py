@@ -217,9 +217,10 @@ export function NodePicker({
   );
   const activeItem = allItems.find((i) => i.id === activeItemId) ?? null;
 
-  useEffect(() => {
-    if (searching) setActiveItemId(null);
-  }, [searching]);
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (value.trim().length > 0) setActiveItemId(null);
+  }
 
   function handleSelect(item: PickerItem) {
     if (item.children) {
@@ -290,7 +291,7 @@ export function NodePicker({
                 <input
                   autoFocus
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => handleQueryChange(e.target.value)}
                   placeholder="Search nodes or models..."
                   className="w-full rounded-xl border border-transparent bg-transparent py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none"
                 />

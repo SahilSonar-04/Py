@@ -217,7 +217,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
 
         {/* x/y/width/height sliders */}
         <div className="space-y-3 pl-3">
-          <SliderHandle nodeId={id} id="x" />
+          <SliderHandle id="x" />
           <ParamSlider
             label="X Position (%)"
             info="Horizontal offset of the crop box from the left edge."
@@ -228,7 +228,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             onChange={(v) => set("x", v)}
             onAddToRequest={() => addFieldAndConnect(id, "x", "number", "x_position")}
           />
-          <SliderHandle nodeId={id} id="y" />
+          <SliderHandle id="y" />
           <ParamSlider
             label="Y Position (%)"
             info="Vertical offset of the crop box from the top edge."
@@ -239,7 +239,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             onChange={(v) => set("y", v)}
             onAddToRequest={() => addFieldAndConnect(id, "y", "number", "y_position")}
           />
-          <SliderHandle nodeId={id} id="width" />
+          <SliderHandle id="width" />
           <ParamSlider
             label="Width (%)"
             info="Crop width as a percentage of the original image."
@@ -251,7 +251,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
             onChange={(v) => set("width", v)}
             onAddToRequest={() => addFieldAndConnect(id, "width", "number", "width")}
           />
-          <SliderHandle nodeId={id} id="height" />
+          <SliderHandle id="height" />
           <ParamSlider
             label="Height (%)"
             info="Crop height as a percentage of the original image."
@@ -299,8 +299,7 @@ export function CropImageNode({ id, data, selected }: NodeProps<CropImageData>) 
   );
 }
 
-/** Renders just the absolutely-positioned typed handle dot for a slider row. */
-function SliderHandle({ nodeId, id }: { nodeId: string; id: string }) {
+function SliderHandle({ id }: { id: string }) {
   return (
     <div className="relative h-0" style={{ overflow: "visible" }}>
       <div className="absolute flex items-center" style={{ left: -34, top: -6 }}>
