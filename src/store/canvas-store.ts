@@ -423,7 +423,7 @@ function getInputType(
   return NODE_INPUT_TYPES[`${node.type}:${handle}`] ?? "any";
 }
 
-function isCompatible(
+export function isCompatible(
   source: HandleDataType,
   target: HandleDataType
 ): boolean {
@@ -445,7 +445,7 @@ function colorForType(type: HandleDataType): string {
   return map[type];
 }
 
-function wouldCreateCycle(
+export function wouldCreateCycle(
   edges: PyEdge[],
   source: string,
   target: string
