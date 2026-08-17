@@ -2,6 +2,8 @@ import { task, runs } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/prisma";
 import { cropImageTask, type CropImagePayload } from "./crop-image";
 import { geminiTask, type GeminiTaskPayload } from "./gemini";
+import { knowledgeRetrieveTask, type KnowledgeRetrievePayload } from "./knowledge";
+import { agentTask, type AgentTaskPayload } from "./agent";
 import { labelForResponseSource } from "@/lib/response-label";
 import type { PyEdge, PyNode } from "@/types/workflow";
 
@@ -78,6 +80,12 @@ export const orchestratorTask = task({
       }
       if (node.type === "gemini") {
         return executeGeminiNode(runId, node, deps);
+      }
+      if (node.type === "knowledge") {
+        return executeKnowledgeNode(runId, node, deps);
+      }
+      if (node.type === "agent") {
+        return executeAgentNode(runId, node, deps);
       }
       return executeInlineNode(runId, node, deps, nodeMap);
     }
@@ -303,6 +311,11 @@ function extractCachedOutput(node: PyNode): Record<string, unknown> {
   const data = node.data as unknown as Record<string, unknown>;
   if (node.type === "crop_image") return { output_image: data.outputImageUrl ?? "" };
   if (node.type === "gemini") return { response: data.response ?? "" };
+  if (node.type === "knowledge") {
+    const chunks = (data.retrievedChunks as string[]) ?? [];
+    return { context: chunks.join("\n\n---\n\n") };
+  }
+  if (node.type === "agent") return { response: data.response ?? "" };
   if (node.type === "request") {
     const fields = (data.fields as { id: string; value: string }[]) ?? [];
     return Object.fromEntries(fields.map((f) => [f.id, f.value]));
@@ -317,6 +330,156 @@ function resolveInput(deps: ResolvedDep[], targetHandle: string, fallback: unkno
   return value ?? fallback;
 }
 
+// ---------- Knowledge - embed query + retrieve top-K chunks ----------
+
+async function executeKnowledgeNode(
+  runId: string,
+  node: PyNode,
+  deps: ResolvedDep[]
+): Promise<Record<string, unknown>> {
+  const data = node.data as { sourceId?: string; topK?: number; query?: string };
+  const query = (resolveInput(deps, "query", data.query) as string) ?? data.query ?? "";
+  const sourceId = data.sourceId;
+
+  if (!sourceId) {
+    const nodeExec = await prisma.nodeExecution.create({
+      data: {
+        runId,
+        nodeId: node.id,
+        nodeType: "knowledge",
+        nodeLabel: (node.data as { label?: string })?.label ?? null,
+        status: "FAILED",
+        startedAt: new Date(),
+        finishedAt: new Date(),
+        durationMs: 0,
+        error: "Knowledge source not ingested yet — click Ingest on the node first",
+      },
+    });
+    return {};
+  }
+
+  const nodeExec = await prisma.nodeExecution.create({
+    data: {
+      runId,
+      nodeId: node.id,
+      nodeType: "knowledge",
+      nodeLabel: (node.data as { label?: string })?.label ?? null,
+      status: "RUNNING",
+      startedAt: new Date(),
+      inputs: deps.map((d) => ({ from: d.sourceNodeId, handle: d.sourceHandle })),
+    },
+  });
+
+  const start = Date.now();
+
+  try {
+    const payload: KnowledgeRetrievePayload = {
+      sourceId,
+      query,
+      topK: data.topK ?? 4,
+    };
+
+    const handle = await knowledgeRetrieveTask.trigger(payload);
+    const result = await runs.poll(handle.id, { pollIntervalMs: 1000 });
+
+    if (result.status !== "COMPLETED") {
+      const errObj = (result as unknown as { error?: { message?: string } }).error;
+      throw new Error(errObj?.message ?? `Knowledge retrieval failed: ${result.status}`);
+    }
+
+    const context = (result.output as { chunks: string[] }).chunks.join("\n\n---\n\n");
+    await prisma.nodeExecution.update({
+      where: { id: nodeExec.id },
+      data: {
+        status: "SUCCESS",
+        finishedAt: new Date(),
+        durationMs: Date.now() - start,
+        output: { context } as object,
+      },
+    });
+    return { context };
+  } catch (err) {
+    await prisma.nodeExecution.update({
+      where: { id: nodeExec.id },
+      data: {
+        status: "FAILED",
+        finishedAt: new Date(),
+        durationMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
+    return {};
+  }
+}
+
+// ---------- Agent - Gemini function calling with tool loop ----------
+
+async function executeAgentNode(
+  runId: string,
+  node: PyNode,
+  deps: ResolvedDep[]
+): Promise<Record<string, unknown>> {
+  const data = node.data as {
+    prompt?: string;
+    enabledTools?: string[];
+    sourceId?: string;
+  };
+  const prompt = (resolveInput(deps, "prompt", data.prompt) as string) ?? data.prompt ?? "";
+
+  const nodeExec = await prisma.nodeExecution.create({
+    data: {
+      runId,
+      nodeId: node.id,
+      nodeType: "agent",
+      nodeLabel: (node.data as { label?: string })?.label ?? null,
+      status: "RUNNING",
+      startedAt: new Date(),
+      inputs: deps.map((d) => ({ from: d.sourceNodeId, handle: d.sourceHandle })),
+    },
+  });
+
+  const start = Date.now();
+
+  try {
+    const payload: AgentTaskPayload = {
+      prompt,
+      enabledTools: data.enabledTools ?? [],
+      knowledgeSourceId: data.sourceId,
+    };
+
+    const handle = await agentTask.trigger(payload);
+    const result = await runs.poll(handle.id, { pollIntervalMs: 1000 });
+
+    if (result.status !== "COMPLETED") {
+      const errObj = (result as unknown as { error?: { message?: string } }).error;
+      throw new Error(errObj?.message ?? `Agent task failed: ${result.status}`);
+    }
+
+    const output = result.output as { response: string; toolCallLog: unknown[] };
+    await prisma.nodeExecution.update({
+      where: { id: nodeExec.id },
+      data: {
+        status: "SUCCESS",
+        finishedAt: new Date(),
+        durationMs: Date.now() - start,
+        output: { response: output.response, toolCallLog: output.toolCallLog } as object,
+      },
+    });
+    return { response: output.response };
+  } catch (err) {
+    await prisma.nodeExecution.update({
+      where: { id: nodeExec.id },
+      data: {
+        status: "FAILED",
+        finishedAt: new Date(),
+        durationMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
+    return {};
+  }
+}
+
 function resolveAllInputs(deps: ResolvedDep[], targetHandle: string): unknown[] {
   return deps
     .filter((d) => d.targetHandle === targetHandle)
@@ -324,7 +487,7 @@ function resolveAllInputs(deps: ResolvedDep[], targetHandle: string): unknown[] 
     .filter(Boolean);
 }
 
-function assertNoCycles(nodes: PyNode[], edges: PyEdge[]) {
+export function assertNoCycles(nodes: PyNode[], edges: PyEdge[]) {
   const adjacency = new Map<string, string[]>();
   for (const e of edges) {
     const list = adjacency.get(e.source) ?? [];

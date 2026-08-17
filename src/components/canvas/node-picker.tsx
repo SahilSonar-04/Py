@@ -4,12 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Search, Crop, Sparkles, X, ChevronRight, Clock,
-  Image as ImageIcon, Video, Mic, Layers, LogIn, Wrench, Brain,
+  Image as ImageIcon, Video, Mic, Layers, LogIn, Wrench, Brain, BookOpen, Bot,
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useReactFlow } from "reactflow";
 import { useCanvasStore } from "@/store/canvas-store";
-import type { CropImageData, GeminiData } from "@/types/workflow";
+import type { CropImageData, GeminiData, KnowledgeData } from "@/types/workflow";
 
 type Category = "Image" | "Video" | "Audio" | "Others";
 
@@ -22,7 +22,7 @@ interface PickerItem {
   enabled: boolean;
 
   children?: PickerItem[];
-  create?: () => { type: "crop_image" | "gemini"; data: CropImageData | GeminiData };
+  create?: () => { type: "crop_image" | "gemini" | "knowledge" | "agent"; data: CropImageData | GeminiData | KnowledgeData | import("@/types/workflow").AgentData };
 }
 
 const CATEGORY_ICON: Record<Category, React.ReactNode> = {
@@ -67,9 +67,47 @@ function makeGeminiItem(): PickerItem {
   };
 }
 
+function makeKnowledgeItem(): PickerItem {
+  return {
+    id: "knowledge",
+    label: "Knowledge (RAG)",
+    description: "Embed documents and retrieve relevant chunks via pgvector",
+    category: "Others",
+    icon: <BookOpen className="h-4 w-4" />,
+    enabled: true,
+    create: () => ({
+      type: "knowledge",
+      data: {
+        label: "Knowledge", sourceText: "", sourceName: "", query: "",
+        topK: 4, ingested: false, status: "idle",
+      } as KnowledgeData,
+    }),
+  };
+}
+
+function makeAgentItem(): PickerItem {
+  return {
+    id: "agent",
+    label: "Agent (Tool Calling)",
+    description: "Agentic node — autonomously selects and executes tools via function calling",
+    category: "Others",
+    icon: <Bot className="h-4 w-4" />,
+    enabled: true,
+    create: () => ({
+      type: "agent",
+      data: {
+        label: "Agent", prompt: "", enabledTools: ["search_web"],
+        status: "idle", settingsOpen: false,
+      } as import("@/types/workflow").AgentData,
+    }),
+  };
+}
+
 function buildSections(): { category: Category; items: PickerItem[] }[] {
   const cropImage = makeCropImageItem();
   const gemini = makeGeminiItem();
+  const knowledge = makeKnowledgeItem();
+  const agent = makeAgentItem();
 
   return [
     {
@@ -103,6 +141,8 @@ function buildSections(): { category: Category; items: PickerItem[] }[] {
       items: [
         { id: "input", label: "Input", description: "Coming soon", category: "Others", icon: <LogIn className="h-4 w-4" />, enabled: false },
         { id: "utility", label: "Utility", description: "Coming soon", category: "Others", icon: <Wrench className="h-4 w-4" />, enabled: false },
+        knowledge,
+        agent,
         {
           id: "llm-call",
           label: "LLM Call",
