@@ -37,6 +37,8 @@ export interface KnowledgeIngestResult {
   chunkCount: number;
 }
 
+const EMBED_CONCURRENCY = 8;
+
 export const knowledgeIngestTask = task({
   id: "knowledge-ingest",
   maxDuration: 120,
@@ -49,17 +51,22 @@ export const knowledgeIngestTask = task({
     const genAI = new GoogleGenerativeAI(apiKey);
     const chunks = chunkText(payload.text);
 
-    for (let idx = 0; idx < chunks.length; idx++) {
-      const vector = await embed(genAI, chunks[idx]);
-      const vectorLiteral = `[${vector.join(",")}]`;
+    for (let i = 0; i < chunks.length; i += EMBED_CONCURRENCY) {
+      const batch = chunks.slice(i, i + EMBED_CONCURRENCY);
+      const vectors = await Promise.all(batch.map((c) => embed(genAI, c)));
 
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "KnowledgeChunk" (id, "sourceId", content, embedding, "chunkIndex")
-         VALUES (gen_random_uuid()::text, $1, $2, $3::vector, $4)`,
-        payload.sourceId,
-        chunks[idx],
-        vectorLiteral,
-        idx
+      await Promise.all(
+        vectors.map((vector, j) => {
+          const vectorLiteral = `[${vector.join(",")}]`;
+          return prisma.$executeRawUnsafe(
+            `INSERT INTO "KnowledgeChunk" (id, "sourceId", content, embedding, "chunkIndex")
+             VALUES (gen_random_uuid()::text, $1, $2, $3::vector, $4)`,
+            payload.sourceId,
+            batch[j],
+            vectorLiteral,
+            i + j
+          );
+        })
       );
     }
 
