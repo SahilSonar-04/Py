@@ -6,7 +6,7 @@ export default defineConfig({
   project: "proj_cxnpprlinngvttlkvwgr", 
   runtime: "node",
   logLevel: "log",
-  maxDuration: 120, // seconds - covers the mandatory 30s+ Crop Image delay comfortably
+  maxDuration: 120, // seconds 
   dirs: ["./src/trigger"],
   retries: {
     enabledInDev: false,

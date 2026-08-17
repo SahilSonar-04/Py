@@ -1,4 +1,4 @@
-import { task, wait } from "@trigger.dev/sdk/v3";
+import { task } from "@trigger.dev/sdk/v3";
 import ffmpeg from "fluent-ffmpeg";
 import { promises as fs } from "fs";
 import os from "os";
@@ -52,9 +52,6 @@ export const cropImageTask = task({
         width: safeWidth,
         height: safeHeight,
       });
-
-      // --- MANDATORY 30+ second artificial delay (hard requirement, do not skip) ---
-      await wait.for({ seconds: 31 });
 
       const croppedBuffer = await fs.readFile(outputPath);
       const filename = `crop-${Date.now()}.png`;
