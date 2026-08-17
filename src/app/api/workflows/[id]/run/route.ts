@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { runWorkflowSchema } from "@/lib/schemas";
@@ -38,33 +39,16 @@ export async function POST(
 
   await prisma.workflow.update({ where: { id: workflowId }, data: { status: "running" } });
 
+  let handleId: string;
   try {
     const { orchestratorTask } = await import("@/trigger/orchestrator");
-    const { runs } = await import("@trigger.dev/sdk/v3");
     const handle = await orchestratorTask.trigger({
       runId: run.id,
       nodes: graph.nodes,
       edges: graph.edges,
       targetNodeIds: scope === "FULL" ? undefined : targetNodeIds,
     });
-
-    runs
-      .poll(handle.id, { pollIntervalMs: 1000 })
-      .then(async (result) => {
-        if (result.status === "COMPLETED") {
-          await finalizeRun(run.id, workflowId);
-        } else {
-          const reason =
-            "error" in result && result.error
-              ? String((result.error as { message?: string }).message ?? result.error)
-              : `Orchestrator run ended with status: ${result.status}`;
-          await markRunFailed(run.id, workflowId, reason);
-        }
-      })
-      .catch(async (err: unknown) => {
-        console.error("Orchestrator failed:", err);
-        await markRunFailed(run.id, workflowId, err instanceof Error ? err.message : String(err));
-      });
+    handleId = handle.id;
   } catch (err) {
     await markRunFailed(run.id, workflowId, err instanceof Error ? err.message : String(err));
     return NextResponse.json(
@@ -72,6 +56,25 @@ export async function POST(
       { status: 500 }
     );
   }
+
+  after(async () => {
+    try {
+      const { runs } = await import("@trigger.dev/sdk/v3");
+      const result = await runs.poll(handleId, { pollIntervalMs: 1000 });
+      if (result.status === "COMPLETED") {
+        await finalizeRun(run.id, workflowId);
+      } else {
+        const reason =
+          "error" in result && result.error
+            ? String((result.error as { message?: string }).message ?? result.error)
+            : `Orchestrator run ended with status: ${result.status}`;
+        await markRunFailed(run.id, workflowId, reason);
+      }
+    } catch (err) {
+      console.error("Orchestrator failed:", err);
+      await markRunFailed(run.id, workflowId, err instanceof Error ? err.message : String(err));
+    }
+  });
 
   return NextResponse.json({ runId: run.id }, { status: 202 });
 }

@@ -75,7 +75,7 @@ function AssetPickerModal({
   const [urls, setUrls] = useState<string[] | null>(null);
 
   useEffect(() => {
-    fetch("/api/uploads/list")
+    fetch("/api/upload")
       .then((r) => r.json())
       .then((json) => setUrls(json.urls ?? []))
       .catch(() => setUrls([]));

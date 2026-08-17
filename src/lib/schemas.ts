@@ -81,4 +81,5 @@ export const knowledgeIngestSchema = z.object({
 export const agentTaskInputSchema = z.object({
   prompt: z.string().min(1),
   enabledTools: z.array(z.string()).default([]),
+  knowledgeSourceId: z.string().optional(),
 });

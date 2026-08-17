@@ -313,7 +313,10 @@ function extractCachedOutput(node: PyNode): Record<string, unknown> {
   if (node.type === "gemini") return { response: data.response ?? "" };
   if (node.type === "knowledge") {
     const chunks = (data.retrievedChunks as string[]) ?? [];
-    return { context: chunks.join("\n\n---\n\n") };
+    return {
+      context: chunks.join("\n\n---\n\n"),
+      source_id: (data.sourceId as string) ?? "",
+    };
   }
   if (node.type === "agent") return { response: data.response ?? "" };
   if (node.type === "request") {
@@ -342,7 +345,7 @@ async function executeKnowledgeNode(
   const sourceId = data.sourceId;
 
   if (!sourceId) {
-    const nodeExec = await prisma.nodeExecution.create({
+    await prisma.nodeExecution.create({
       data: {
         runId,
         nodeId: node.id,
@@ -388,16 +391,17 @@ async function executeKnowledgeNode(
     }
 
     const context = (result.output as { chunks: string[] }).chunks.join("\n\n---\n\n");
+    const output = { context, source_id: sourceId };
     await prisma.nodeExecution.update({
       where: { id: nodeExec.id },
       data: {
         status: "SUCCESS",
         finishedAt: new Date(),
         durationMs: Date.now() - start,
-        output: { context } as object,
+        output: output as object,
       },
     });
-    return { context };
+    return output;
   } catch (err) {
     await prisma.nodeExecution.update({
       where: { id: nodeExec.id },
@@ -412,8 +416,6 @@ async function executeKnowledgeNode(
   }
 }
 
-// ---------- Agent - Gemini function calling with tool loop ----------
-
 async function executeAgentNode(
   runId: string,
   node: PyNode,
@@ -422,9 +424,9 @@ async function executeAgentNode(
   const data = node.data as {
     prompt?: string;
     enabledTools?: string[];
-    sourceId?: string;
   };
   const prompt = (resolveInput(deps, "prompt", data.prompt) as string) ?? data.prompt ?? "";
+  const knowledgeSourceId = resolveInput(deps, "knowledge_source", undefined) as string | undefined;
 
   const nodeExec = await prisma.nodeExecution.create({
     data: {
@@ -444,7 +446,7 @@ async function executeAgentNode(
     const payload: AgentTaskPayload = {
       prompt,
       enabledTools: data.enabledTools ?? [],
-      knowledgeSourceId: data.sourceId,
+      knowledgeSourceId,
     };
 
     const handle = await agentTask.trigger(payload);

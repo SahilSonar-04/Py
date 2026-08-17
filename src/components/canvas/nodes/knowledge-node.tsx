@@ -434,6 +434,23 @@ export function KnowledgeNode({ id, data, selected }: NodeProps<KnowledgeData>) 
             {data.error && <p className="mt-1 text-[10px] text-red-500">{data.error}</p>}
           </div>
         </div>
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <div className="relative" style={{ overflow: "visible" }}>
+            <div className="absolute flex items-center" style={{ right: -22, top: 8 }}>
+              <TypedHandle type="source" position={Position.Right} id="source_id" dataType="text" />
+            </div>
+            <div className="mb-1.5 flex items-center gap-1 text-xs text-gray-500">
+              Source ID
+              <InfoTooltip
+                text="Connect this to an Agent node's Knowledge Source input to enable its Knowledge Lookup tool."
+                side="right"
+              />
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              {data.sourceId ? data.sourceId : "Ingest source text to generate an ID"}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

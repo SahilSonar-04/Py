@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     const handle = await agentTask.trigger({
       prompt: parsed.data.prompt,
       enabledTools: parsed.data.enabledTools,
+      knowledgeSourceId: parsed.data.knowledgeSourceId,
     });
     const run = await runs.poll(handle.id, { pollIntervalMs: 2000 });
 

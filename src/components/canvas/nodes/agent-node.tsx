@@ -40,6 +40,10 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
     s.isHandleConnected(id, "prompt")
   );
 
+  const isKnowledgeSourceConnected = useCanvasStore((s) =>
+    s.isHandleConnected(id, "knowledge_source")
+  );
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [responseExpanded, setResponseExpanded] = useState(false);
   const [toolLogOpen, setToolLogOpen] = useState(false);
@@ -199,6 +203,27 @@ export function AgentNode({ id, data, selected }: NodeProps<AgentData>) {
               isPromptConnected ? "cursor-not-allowed opacity-50" : ""
             }`}
           />
+        </div>
+        <div className="relative" style={{ overflow: "visible" }}>
+          <div className="absolute flex items-center" style={{ left: -22, top: 8 }}>
+            <TypedHandle type="target" position={Position.Left} id="knowledge_source" dataType="text" />
+          </div>
+          <div className="mb-1.5 flex items-center gap-1 pl-3 text-xs text-gray-500">
+            Knowledge Source
+            <InfoTooltip
+              text="Connect a Knowledge node's Source ID output here to enable the Knowledge Lookup tool."
+              side="right"
+            />
+          </div>
+          <div
+            className={`ml-3 rounded-lg border px-3 py-2 text-xs ${
+              isKnowledgeSourceConnected
+                ? "border-purple-200 bg-purple-50 text-purple-700"
+                : "border-gray-200 bg-gray-50 text-gray-400"
+            }`}
+          >
+            {isKnowledgeSourceConnected ? "Connected" : "Not connected"}
+          </div>
         </div>
 
         {/* Tools */}

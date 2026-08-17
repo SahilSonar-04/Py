@@ -1,18 +1,16 @@
 import type { Edge, Node } from "reactflow";
 
-// ---------- Node type identifiers ----------
 export type PyNodeType = "request" | "crop_image" | "gemini" | "knowledge" | "agent" | "response" | "sticky_note";
 export type StickyNoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "orange";
 export type StickyNoteFont = "sans" | "serif" | "mono" | "cursive";
 
-// ---------- Request-Inputs node ----------
 export type RequestFieldType = "text_field" | "image_field" | "number_field";
 
 export interface StickyNoteData {
   text: string;
   color: StickyNoteColor;
   bold: boolean;
-  fontSize: number; // px, clamp 12-48
+  fontSize: number;
   font: StickyNoteFont;
 }
 
@@ -20,7 +18,7 @@ export interface RequestField {
   id: string;
   name: string;
   type: RequestFieldType;
-  value: string; // text content OR uploaded image URL OR stringified number
+  value: string;
 }
 
 export interface RequestInputsData {
@@ -29,20 +27,18 @@ export interface RequestInputsData {
   locked: true;
 }
 
-// ---------- Crop Image node ----------
 export interface CropImageData {
   label: string;
-  inputImageUrl: string; // manual value if not connected
-  x: number; // 0-100
-  y: number; // 0-100
-  width: number; // 0-100
-  height: number; // 0-100
+  inputImageUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
   outputImageUrl?: string;
   status: ExecStatus;
   error?: string;
 }
 
-// ---------- Gemini node ----------
 export const GEMINI_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.5-pro",
@@ -64,21 +60,19 @@ export interface GeminiData {
   settingsOpen: boolean;
 }
 
-// ---------- Knowledge (RAG) node ----------
 export interface KnowledgeData {
   label: string;
-  sourceText: string;        // raw pasted/uploaded text
+  sourceText: string;
   sourceName: string;
-  sourceId?: string;         // DB id after ingest
-  query: string;             // can be wired from Request-Inputs or another node's output
-  topK: number;              // default 4
-  retrievedChunks?: string[];// last run's result, for the node preview
-  ingested: boolean;         // whether text has been chunked + embedded
+  sourceId?: string;
+  query: string;
+  topK: number;
+  retrievedChunks?: string[];
+  ingested: boolean;
   status: ExecStatus;
   error?: string;
 }
 
-// ---------- Agent (tool-calling) node ----------
 export interface ToolCallLogEntry {
   tool: string;
   args: Record<string, unknown>;
@@ -88,7 +82,8 @@ export interface ToolCallLogEntry {
 export interface AgentData {
   label: string;
   prompt: string;
-  enabledTools: string[];    // e.g. ["search_web", "knowledge_lookup"]
+  enabledTools: string[];
+  knowledgeSourceId?: string;
   response?: string;
   toolCallLog?: ToolCallLogEntry[];
   status: ExecStatus;
@@ -96,12 +91,10 @@ export interface AgentData {
   settingsOpen: boolean;
 }
 
-// ---------- Response node ----------
 export interface ResponseSlot {
   id: string;
   label: string;
   value?: string;
-
   customLabel?: string;
 }
 
@@ -125,15 +118,13 @@ export type PyNodeData =
 export type PyNode = Node<PyNodeData, PyNodeType>;
 export type PyEdge = Edge;
 
-// ---------- Handle data-type for connection validation ----------
 export type HandleDataType = "text" | "image" | "video" | "audio" | "file" | "number" | "boolean" | "any";
 
-// Map of nodeType -> handleId -> data type, used for type-safe connection validation
 export const NODE_OUTPUT_TYPES: Record<string, HandleDataType> = {
-  // request field outputs are resolved dynamically (per field) in validation logic
   "crop_image:output_image": "image",
   "gemini:response": "text",
   "knowledge:context": "text",
+  "knowledge:source_id": "text",
   "agent:response": "text",
 };
 
@@ -151,17 +142,16 @@ export const NODE_INPUT_TYPES: Record<string, HandleDataType> = {
   "gemini:file": "file",
   "knowledge:query": "text",
   "agent:prompt": "text",
+  "agent:knowledge_source": "text",
   "response:result": "any",
 };
 
-// ---------- Workflow graph persisted shape ----------
 export interface WorkflowGraph {
   nodes: PyNode[];
   edges: PyEdge[];
   viewport?: { x: number; y: number; zoom: number };
 }
 
-// ---------- Run / history types (mirrors Prisma enums for client use) ----------
 export type RunStatus = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "PARTIAL";
 export type RunScope = "FULL" | "PARTIAL" | "SINGLE";
 export type NodeExecStatus = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "SKIPPED";
