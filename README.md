@@ -100,6 +100,15 @@ This project has **two separate deployment surfaces** — pushing to `main` only
 - Undo/redo is a simple snapshot stack (50 entries), not a command/diff pattern — fine for this scope, would need revisiting for very large graphs.
 - The node picker's Video/Audio categories show disabled placeholder entries to match the reference UI's categorization, since only Crop Image and Gemini 3.1 Pro are required to be functional per spec.
 
+## Responsible AI & Data Handling
+
+- **Uploaded images** are stored via Transloadit with unexported, time-limited URLs (~24h expiry) rather than permanent public storage — see `src/lib/transloadit.ts`.
+- **Prompts and model outputs** are persisted per-run in `NodeExecution.output`/`inputs` for auditability (the History Panel), scoped to the authenticated `userId` via Clerk, and never shared across users (`workflow.userId !== userId` check on every route).
+- **RAG knowledge sources** are stored in Postgres via pgvector with user-scoped ownership (`KnowledgeSource.userId`). Embeddings are generated via Google's `text-embedding-004` model and stored locally in the same database — no third-party vector store is involved.
+- **Agent tool calls** are fully logged — every function call, its arguments, and its result are persisted in `NodeExecution.output.toolCallLog` for complete traceability of agentic behavior.
+- **No PII-specific redaction is implemented yet** — this is a known gap. In a production version, image/text inputs to Gemini nodes would pass through a lightweight PII-detection step before being sent to a third-party model provider.
+- **Model provider**: all generation calls go to Google's Gemini API under Google's data-use terms; no self-hosted model is used, so there is no on-prem inference path today.
+
 ## Sample workflow
 
 From the dashboard, click **Load Sample Workflow** to create a pre-built workflow matching the spec exactly: Request-Inputs (text + image fields) → two parallel Crop Image nodes + a Gemini copywriter node → a condenser Gemini node → a final Gemini node combining everything → Response.
