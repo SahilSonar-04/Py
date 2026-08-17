@@ -9,7 +9,7 @@ export const requestFieldSchema = z.object({
 
 export const rfNodeSchema = z.object({
   id: z.string(),
-  type: z.enum(["request", "crop_image", "gemini", "response", "sticky_note"]), 
+  type: z.enum(["request", "crop_image", "gemini", "knowledge", "agent", "response", "sticky_note"]), 
   position: z.object({ x: z.number(), y: z.number() }),
   data: z.record(z.string(), z.any()),
   width: z.number().nullable().optional(),
@@ -69,4 +69,16 @@ export const geminiTaskInputSchema = z.object({
   prompt: z.string().min(1),
   systemPrompt: z.string().optional(),
   imageUrls: z.array(z.string()).optional(),
+});
+
+export const knowledgeIngestSchema = z.object({
+  text: z.string().min(1, "Source text is required"),
+  sourceName: z.string().min(1).max(120).default("Untitled Source"),
+  workflowId: z.string().min(1),
+  nodeId: z.string().min(1),
+});
+
+export const agentTaskInputSchema = z.object({
+  prompt: z.string().min(1),
+  enabledTools: z.array(z.string()).default([]),
 });

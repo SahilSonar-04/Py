@@ -1,7 +1,7 @@
 import type { Edge, Node } from "reactflow";
 
 // ---------- Node type identifiers ----------
-export type PyNodeType = "request" | "crop_image" | "gemini" | "response" | "sticky_note";
+export type PyNodeType = "request" | "crop_image" | "gemini" | "knowledge" | "agent" | "response" | "sticky_note";
 export type StickyNoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "orange";
 export type StickyNoteFont = "sans" | "serif" | "mono" | "cursive";
 
@@ -64,6 +64,38 @@ export interface GeminiData {
   settingsOpen: boolean;
 }
 
+// ---------- Knowledge (RAG) node ----------
+export interface KnowledgeData {
+  label: string;
+  sourceText: string;        // raw pasted/uploaded text
+  sourceName: string;
+  sourceId?: string;         // DB id after ingest
+  query: string;             // can be wired from Request-Inputs or another node's output
+  topK: number;              // default 4
+  retrievedChunks?: string[];// last run's result, for the node preview
+  ingested: boolean;         // whether text has been chunked + embedded
+  status: ExecStatus;
+  error?: string;
+}
+
+// ---------- Agent (tool-calling) node ----------
+export interface ToolCallLogEntry {
+  tool: string;
+  args: Record<string, unknown>;
+  result: unknown;
+}
+
+export interface AgentData {
+  label: string;
+  prompt: string;
+  enabledTools: string[];    // e.g. ["search_web", "knowledge_lookup"]
+  response?: string;
+  toolCallLog?: ToolCallLogEntry[];
+  status: ExecStatus;
+  error?: string;
+  settingsOpen: boolean;
+}
+
 // ---------- Response node ----------
 export interface ResponseSlot {
   id: string;
@@ -85,6 +117,8 @@ export type PyNodeData =
   | RequestInputsData
   | CropImageData
   | GeminiData
+  | KnowledgeData
+  | AgentData
   | ResponseData
   | StickyNoteData;
 
@@ -99,6 +133,8 @@ export const NODE_OUTPUT_TYPES: Record<string, HandleDataType> = {
   // request field outputs are resolved dynamically (per field) in validation logic
   "crop_image:output_image": "image",
   "gemini:response": "text",
+  "knowledge:context": "text",
+  "agent:response": "text",
 };
 
 export const NODE_INPUT_TYPES: Record<string, HandleDataType> = {
@@ -113,6 +149,8 @@ export const NODE_INPUT_TYPES: Record<string, HandleDataType> = {
   "gemini:video": "video",
   "gemini:audio": "audio",
   "gemini:file": "file",
+  "knowledge:query": "text",
+  "agent:prompt": "text",
   "response:result": "any",
 };
 
