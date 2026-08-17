@@ -5,6 +5,7 @@ on:
     paths:
       - "src/trigger/**"
       - "trigger.config.ts"
+  workflow_dispatch: {}
 
 jobs:
   deploy:
