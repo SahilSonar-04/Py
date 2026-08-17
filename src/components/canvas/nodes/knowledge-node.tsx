@@ -127,19 +127,54 @@ export function KnowledgeNode({ id, data, selected }: NodeProps<KnowledgeData>) 
           nodeId: id,
         }),
       });
-      const json = await res.json();
-      if (json.sourceId) {
-        set("sourceId", json.sourceId);
-        set("ingested", true);
-      } else {
+
+      let json: { sourceId?: string; runId?: string; error?: unknown } = {};
+      try {
+        json = await res.json();
+      } catch {
+        set("error", `Server returned a non-JSON response (HTTP ${res.status}) starting ingest.`);
+        return;
+      }
+
+      if (!res.ok || !json.sourceId || !json.runId) {
         const message =
           typeof json.error === "string"
             ? json.error
             : json.error
             ? JSON.stringify(json.error)
-            : "Ingest failed";
+            : `Failed to start ingest (HTTP ${res.status})`;
         set("error", message);
+        return;
       }
+
+      const { sourceId, runId } = json as { sourceId: string; runId: string };
+      const POLL_MS = 2000;
+      const MAX_ATTEMPTS = 150; // ~5 minutes ceiling, adjust if your docs are huge
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+
+        const statusRes = await fetch(`/api/nodes/knowledge/ingest-status?runId=${runId}`);
+        let statusJson: { status?: string; error?: string } = {};
+        try {
+          statusJson = await statusRes.json();
+        } catch {
+          continue; // transient hiccup — retry next tick rather than failing hard
+        }
+
+        if (statusJson.status === "COMPLETED") {
+          set("sourceId", sourceId);
+          set("ingested", true);
+          return;
+        }
+        if (statusJson.status === "FAILED") {
+          set("error", statusJson.error ?? "Ingest failed");
+          return;
+        }
+        // "RUNNING" — keep polling
+      }
+
+      set("error", "Ingest is taking longer than expected. It may still finish — try Run again shortly.");
     } catch (err) {
       set("error", err instanceof Error ? err.message : String(err));
     } finally {
