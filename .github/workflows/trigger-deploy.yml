@@ -17,6 +17,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - run: npx trigger.dev@latest deploy
+      - name: Check for TRIGGER_ACCESS_TOKEN
+        id: check_token
+        env:
+          TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::TRIGGER_ACCESS_TOKEN secret is not set — skipping Trigger.dev deploy. Add it under Repo Settings > Secrets and variables > Actions."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy to Trigger.dev
+        if: steps.check_token.outputs.skip == 'false'
+        run: npx trigger.dev@latest deploy
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}

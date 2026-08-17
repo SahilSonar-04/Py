@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Plus, Workflow as WorkflowIcon, Pencil, Trash2, Loader2, Download, Upload } from "lucide-react";
@@ -23,7 +24,7 @@ function ClientFormattedDate({ iso }: { iso: string }) {
 }
 
 export function DashboardClient({ initialWorkflows }: { initialWorkflows: WorkflowSummary[] }) {
-  const [workflows, setWorkflows] = useState(initialWorkflows);
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>(initialWorkflows);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -114,7 +115,7 @@ export function DashboardClient({ initialWorkflows }: { initialWorkflows: Workfl
     } finally {
       setImporting(false);
     }
-  }  
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#fafafa]">
