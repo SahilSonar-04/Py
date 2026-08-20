@@ -1,12 +1,60 @@
-# Py — LLM Workflow Builder
+# Py — Visual LLM Workflow Builder
 
-A focused clone of the Galaxy.ai workflow builder, scoped to LLM workflows: auth → dashboard → canvas, four node types (Request-Inputs, Crop Image, Gemini, Response), Trigger.dev-driven execution, Postgres-backed history.
+A node-based canvas for building and running LLM workflows: drag nodes onto a graph, wire their inputs/outputs together, and execute the DAG server-side with full run history.
 
 ## Stack
 
-Next.js (App Router, TS strict) · Clerk · Prisma + Neon Postgres · React Flow · Zustand · Zod · Trigger.dev v3 SDK · `@google/generative-ai` · `fluent-ffmpeg` (shells out to real `ffmpeg`/`ffprobe`, Crop Image) · Tailwind v4 · Lucide React
+- **Next.js 16** (App Router, TypeScript strict)
+- **Clerk** — auth
+- **Prisma + Neon Postgres** (with `pgvector` extension)
+- **React Flow** — canvas/graph UI
+- **Zustand** — canvas state, undo/redo, connection validation
+- **Trigger.dev v3** — background task execution
+- **Google Generative AI SDK** — Gemini calls + embeddings
+- **fluent-ffmpeg** — real ffmpeg/ffprobe for image cropping
+- **Transloadit** — image upload storage (with a local-disk fallback for dev)
+- **Tailwind v4**, **Zod**, **Vitest**
 
-## Quick start
+## Features
+
+### Canvas / editor
+- Drag-and-drop node placement, right-click context menu to spawn nodes at cursor
+- Typed connection handles (text / image / video / audio / file / number / boolean / any) — incompatible connections are rejected client-side, both visually (red dashed line while dragging) and on drop
+- Cycle detection prevents non-DAG graphs, both client-side (before the edge is created) and server-side (orchestrator throws as a safety net)
+- Undo/redo (50-entry snapshot stack), copy/paste, duplicate (with or without edges), lock/unlock nodes
+- Multi-select with rubber-band selection mode, select-all, keyboard delete
+- Auto-arrange: layered BFS layout that lays out nodes by dependency depth
+- Minimap, zoom/pan controls, fit-view, keyboard shortcuts modal
+- Sticky notes with color, bold, font size, and font family options
+- Export/import workflows as JSON (round-trips name + full graph)
+
+### Node types
+| Node | Purpose |
+|---|---|
+| **Request-Inputs** | Defines the workflow's input parameters (text / number / image fields). Locked, always present. |
+| **Crop Image** | Percentage-based image crop, executed via real ffmpeg (`crop=w:h:x:y`) against fetched image bytes. |
+| **Gemini** | Text generation via `gemini-2.5-flash` / `gemini-2.5-pro`, with vision (multi-image), plus placeholder inputs for video/audio/file. |
+| **Knowledge (RAG)** | Upload or paste a document (PDF, DOCX, TXT, MD, CSV, JSON, XML, HTML), chunk it, embed with Gemini embeddings, store in Postgres via `pgvector`, and retrieve top-K chunks by cosine similarity at query time. |
+| **Agent** | Function-calling node — Gemini autonomously chooses between `search_web` and `knowledge_lookup` tools across multiple turns, with a full tool-call log persisted per run. |
+| **Response** | Collects and labels outputs from any upstream node into the workflow's final result. Locked, always present. |
+| **Sticky Note** | Free-floating annotation, not part of execution. |
+
+Any numeric/text/image input on a node can be promoted to a Request-Inputs field with one click ("Add to Request"), auto-wiring the connection.
+
+### Execution
+- **Run scopes**: full workflow, a multi-selection ("partial" — everything outside the selection is skipped, not re-run), or a single node.
+- **Orchestrator** (`src/trigger/orchestrator.ts`) resolves the DAG as a promise-per-node graph: each node awaits only its direct upstream dependencies, so independent branches run concurrently and a finished node fans out to dependents immediately.
+- Skipped nodes (outside the run's scope) pass through their last cached output so downstream nodes still resolve correctly.
+- Individual nodes can also be run in isolation from their own "Run" button, bypassing the orchestrator entirely.
+- **History panel**: every node execution is written to Postgres as it happens (not batched at the end), so the UI's polling shows live progress — including a pulsing glow on currently-running nodes and per-node expandable inputs/output/error/timing.
+- A workflow reconnects to its most recent run on page load and resumes polling if it's still in progress.
+
+### Auth & data
+- Clerk-gated routes via middleware; every API route re-checks `userId` ownership per-resource
+- Workflows, runs, node executions, and knowledge sources are all scoped to the authenticated user
+- Image uploads go through Transloadit (unexported, ~24h-expiry URLs) by default, or `public/uploads/` if `USE_LOCAL_UPLOAD_FALLBACK=true`
+
+## Getting started
 
 ### 1. Install
 
@@ -16,99 +64,90 @@ npm install
 
 ### 2. Environment variables
 
-Copy `.env.example` to `.env.local` and fill in real values:
-
 ```bash
 cp .env.example .env.local
 ```
 
-| Variable | Where to get it |
+| Variable | Source |
 |---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | clerk.com → your app → API Keys |
-| `DATABASE_URL` | Neon dashboard → connection string (use the pooled one) |
-| `TRIGGER_SECRET_KEY` | trigger.dev → project settings → API keys |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI Studio → Get API Key |
-| `TRANSLOADIT_*` | transloadit.com (see upload note below) |
-| `USE_LOCAL_UPLOAD_FALLBACK` | `false` by default (real Transloadit required); set `true` to store uploads under `public/uploads/` instead, for local testing without Transloadit credentials |
-| `NEXT_PUBLIC_CANDIDATE_LINKEDIN` | your LinkedIn profile URL |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
+| `DATABASE_URL` | Neon dashboard → pooled connection string |
+| `TRIGGER_SECRET_KEY` | Trigger.dev → project settings → API keys |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI Studio |
+| `TRANSLOADIT_AUTH_KEY` / `TRANSLOADIT_AUTH_SECRET` | transloadit.com |
+| `USE_LOCAL_UPLOAD_FALLBACK` | `false` by default; set `true` to skip Transloadit and store uploads under `public/uploads/` for local testing |
 
-Note: the Trigger.dev **project ref** (`proj_...`) is not an env var — it's hardcoded in `trigger.config.ts`. Only the secret key comes from `.env.local`.
-
-**Image uploads**: with `USE_LOCAL_UPLOAD_FALLBACK=false` (the shipped default), real `TRANSLOADIT_AUTH_KEY` / `TRANSLOADIT_AUTH_SECRET` are required — this matters in particular for the Crop Image task, whose Trigger.dev runner has no shared filesystem with Vercel or your local machine and can only read/write images via real http(s) URLs.
+The Trigger.dev **project ref** (`proj_...`) is hardcoded in `trigger.config.ts`, not an env var.
 
 ### 3. Database
 
 ```bash
 npx prisma generate
-npx prisma db push   # or `npx prisma migrate dev` if you want migration history
+npx prisma db push
 ```
 
-If `prisma generate` fails to fetch engine binaries, that's a network/proxy issue on whatever machine you're running it on (it needs outbound HTTPS to `binaries.prisma.sh`), not a code problem.
+### 4. ffmpeg (local dev only)
 
-### 4. Install ffmpeg locally
-
-Crop Image shells out to real `ffmpeg`/`ffprobe` via `fluent-ffmpeg`. In production this is provisioned automatically by the `aptGet({ packages: ["ffmpeg"] })` build extension in `trigger.config.ts` (see [Deploying](#deploying) below) — but that extension only runs on a deployed Trigger.dev build, **not** on `trigger.dev dev`. For local development you need the real binaries on your own machine's `PATH`:
+Crop Image shells out to real `ffmpeg`/`ffprobe`. In production this is provisioned by the `aptGet` build extension in `trigger.config.ts`, but that only runs on a deployed Trigger.dev build — for `trigger.dev dev` locally, install ffmpeg yourself:
 
 ```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu / Debian
-sudo apt install ffmpeg
-
-# Windows — install from ffmpeg.org and add to PATH
+brew install ffmpeg          # macOS
+sudo apt install ffmpeg      # Ubuntu/Debian
 ```
 
-### 5. Run the app
+### 5. Run
 
-Two processes, two terminals:
+Two processes:
 
 ```bash
-npm run dev                 # Next.js app (dashboard, canvas, API routes)
-npx trigger.dev@latest dev  # Trigger.dev task runner — required for Crop Image / Gemini to actually execute
+npm run dev                 # Next.js app
+npx trigger.dev@latest dev  # task runner — required for any node to actually execute
 ```
 
-Without the second one running, "Run" does nothing — there's no task runner to receive the trigger calls.
+Without the second process, clicking "Run" starts a run that will never complete.
 
 ## Deploying
 
-This project has **two separate deployment surfaces** — pushing to `main` only covers one of them automatically.
+Two separate deploy targets — pushing to `main` only covers one automatically:
 
-- **Vercel** (the Next.js app: dashboard, canvas, API routes, auth) auto-builds/deploys on every push, if the repo is connected. Env vars for this side live in Vercel's project settings.
-- **Trigger.dev** (the task runtime: `crop-image.ts`, `gemini.ts`, `orchestrator.ts`) does **not** deploy with Vercel. It runs on Trigger.dev's own cloud infrastructure and needs its own deploy step:
-
+- **Vercel** (Next.js app) auto-deploys on push if connected. Env vars live in Vercel's project settings.
+- **Trigger.dev** (task runtime: `crop-image.ts`, `gemini.ts`, `knowledge.ts`, `agent.ts`, `orchestrator.ts`) needs its own deploy:
   ```bash
   npx trigger.dev@latest deploy
   ```
+  Env vars for this side (`DATABASE_URL`, Gemini key, Transloadit keys) must be set separately in the Trigger.dev dashboard — Vercel's env vars aren't visible to Trigger.dev's runners.
 
-  This is what actually builds the deployed task image and installs `ffmpeg` via `aptGet` (see `trigger.config.ts`). Env vars for this side (`DATABASE_URL`, Gemini key, Transloadit keys, etc.) must be set separately in the Trigger.dev dashboard's Environment Variables — Vercel's env vars are not visible to Trigger.dev's runners.
+## Project structure
 
-  If you want Trigger.dev deploys automated on push too, set up their GitHub Actions integration (a `TRIGGER_ACCESS_TOKEN` secret + workflow file) — check trigger.dev's CI docs, since this isn't wired up by default here.
+```
+src/
+  app/
+    api/                 # REST routes (workflows, runs, per-node "run single" endpoints, upload)
+    dashboard/            # Workflow list
+    workflows/[id]/       # Canvas page
+    sign-in/, sign-up/    # Clerk auth pages
+  components/
+    canvas/                # React Flow wrapper, toolbars, node picker, history panel
+    canvas/nodes/           # One component per node type
+    dashboard/              # Dashboard list UI
+  store/
+    canvas-store.ts        # Zustand: nodes/edges, undo/redo, connection validation, history
+  trigger/
+    orchestrator.ts        # DAG resolver / dependency-aware execution
+    crop-image.ts, gemini.ts, knowledge.ts, agent.ts   # Individual task definitions
+  lib/
+    schemas.ts             # Zod validation for all API inputs
+    sample-workflow.ts      # Seed data for "Load Sample Workflow"
+    workflow-io.ts          # JSON export/import
+  types/workflow.ts        # Shared node/edge/data types
+prisma/schema.prisma        # Workflow, WorkflowRun, NodeExecution, KnowledgeSource, KnowledgeChunk
+```
 
-## Architecture notes
 
-- **Graph storage**: the full React Flow graph (nodes + edges) is stored as a single JSON column on `Workflow.graph`. This was a deliberate simplification for the time budget — normalizing nodes/edges into their own tables would be the next step for a production version, but JSON keeps reads/writes trivial and the graph is never queried piecemeal.
-- **Execution model**: `src/trigger/orchestrator.ts` resolves the DAG via a promise-per-node graph — each node `await`s only its direct upstream dependencies, so independent branches genuinely execute concurrently and a finished node fans out to dependents immediately, without waiting on unrelated siblings at the same nominal "level." Selective runs (single-node / multi-select) pass a `targetNodeIds` set; nodes outside that set are skipped and their last-cached output is passed through so downstream nodes in scope still resolve correctly.
-- **Crop Image**: implemented with `fluent-ffmpeg`, shelling out to real `ffmpeg`/`ffprobe` binaries (per the spec's "FFmpeg via Trigger.dev" requirement). The task downloads the input image to a scratch file (`os.tmpdir()`), runs `ffprobe` to read its dimensions, applies ffmpeg's `crop=w:h:x:y` filter (a still image is a 1-frame video to ffmpeg), then uploads the result via Transloadit. See [Deploying](#deploying) for how the binaries get provisioned in production.
-- **Type-safe connections**: handle data types (text/image/video/audio/file/number/boolean/any) are checked client-side in the Zustand store's `onConnect` before an edge is created; incompatible drags are silently rejected. DAG-only is enforced both client-side (cycle check before adding an edge) and server-side (orchestrator throws on cycle detection as a safety net).
-- **History**: every node execution within a run is written to `NodeExecution` as it happens (not batched at the end), so the history panel's polling reflects live progress, including the pulsing glow on currently-running nodes.
+## Testing
 
-## Known limitations / deviations from spec
+```bash
+npm test
+```
 
-- **Gemini node's Settings section is visual only.** The collapsed Settings panel on the Gemini node (temperature / max tokens / top-p, see `src/components/canvas/nodes/gemini-node.tsx`) renders and stores values in node data, but nothing in `src/trigger/gemini.ts` reads them into the actual `generateContent` call — every run uses the SDK's defaults regardless of what's set in the UI.
-- **History panel's "API Runs" tab is a placeholder.** See `src/components/canvas/history-panel.tsx` — it shows a static "not tracked yet" message. There's currently no mechanism distinguishing API-triggered runs from UI-triggered runs; every run in the history list today originated from the canvas UI.
-- Undo/redo is a simple snapshot stack (50 entries), not a command/diff pattern — fine for this scope, would need revisiting for very large graphs.
-- The node picker's Video/Audio categories show disabled placeholder entries to match the reference UI's categorization, since only Crop Image and Gemini 3.1 Pro are required to be functional per spec.
-
-## Responsible AI & Data Handling
-
-- **Uploaded images** are stored via Transloadit with unexported, time-limited URLs (~24h expiry) rather than permanent public storage — see `src/lib/transloadit.ts`.
-- **Prompts and model outputs** are persisted per-run in `NodeExecution.output`/`inputs` for auditability (the History Panel), scoped to the authenticated `userId` via Clerk, and never shared across users (`workflow.userId !== userId` check on every route).
-- **RAG knowledge sources** are stored in Postgres via pgvector with user-scoped ownership (`KnowledgeSource.userId`). Embeddings are generated via Google's `text-embedding-004` model and stored locally in the same database — no third-party vector store is involved.
-- **Agent tool calls** are fully logged — every function call, its arguments, and its result are persisted in `NodeExecution.output.toolCallLog` for complete traceability of agentic behavior.
-- **No PII-specific redaction is implemented yet** — this is a known gap. In a production version, image/text inputs to Gemini nodes would pass through a lightweight PII-detection step before being sent to a third-party model provider.
-- **Model provider**: all generation calls go to Google's Gemini API under Google's data-use terms; no self-hosted model is used, so there is no on-prem inference path today.
-
-## Sample workflow
-
-From the dashboard, click **Load Sample Workflow** to create a pre-built workflow matching the spec exactly: Request-Inputs (text + image fields) → two parallel Crop Image nodes + a Gemini copywriter node → a condenser Gemini node → a final Gemini node combining everything → Response.
+Covers cycle detection, connection-type compatibility, workflow JSON import/export, response-label formatting, and API input schemas.
